@@ -1,14 +1,19 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
 async function parseResponse(response) {
-  const data = await response.json().catch(() => null)
+  const body = await response.json().catch(() => null)
 
   if (!response.ok) {
-    const details = Array.isArray(data?.details) ? ` ${data.details.join(' ')}` : ''
-    throw new Error(data?.message ? `${data.message}${details}` : 'Erro ao comunicar com a API.')
+    const error = body?.error ?? body
+    const details = Array.isArray(error?.details) ? ` ${error.details.join(' ')}` : ''
+    throw new Error(error?.message ? `${error.message}${details}` : 'Erro ao comunicar com a API.')
   }
 
-  return data
+  if (body && typeof body === 'object' && 'data' in body) {
+    return body.meta ? { data: body.data, meta: body.meta } : body.data
+  }
+
+  return body
 }
 
 export async function login(payload) {
@@ -20,7 +25,13 @@ export async function login(payload) {
     body: JSON.stringify(payload),
   })
 
-  return parseResponse(response)
+  const data = await parseResponse(response)
+
+  return {
+    token: data.accessToken,
+    tokenType: data.tokenType,
+    expiresIn: data.expiresIn,
+  }
 }
 
 export async function requestPasswordReset(email) {
@@ -54,7 +65,16 @@ export async function getExpenses(token) {
     },
   })
 
-  return parseResponse(response)
+  const responseBody = await parseResponse(response)
+
+  if (responseBody?.data && Array.isArray(responseBody.data)) {
+    return {
+      gastos: responseBody.data,
+      totalRegistros: Number(responseBody.meta?.total ?? responseBody.data.length),
+    }
+  }
+
+  return responseBody
 }
 
 export async function createExpense(token, payload) {
@@ -89,6 +109,32 @@ export async function getCategories(token) {
     },
   })
 
+  const responseBody = await parseResponse(response)
+  return Array.isArray(responseBody?.data) ? responseBody.data : responseBody
+}
+
+export async function getJointAccounts(token) {
+  const response = await fetch(`${API_URL}/contaConjunta`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  const responseBody = await parseResponse(response)
+  return Array.isArray(responseBody?.data) ? responseBody.data : responseBody
+}
+
+export async function createJointAccount(token, payload) {
+  const response = await fetch(`${API_URL}/criarContaConjunta`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+    body: JSON.stringify(payload),
+  })
+
   return parseResponse(response)
 }
 
@@ -107,6 +153,19 @@ export async function createCategory(token, payload) {
 
 export async function payExpense(token, expenseId, payload = {}) {
   const response = await fetch(`${API_URL}/pagarGastos/${expenseId}/pagamento`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  return parseResponse(response)
+}
+
+export async function payInstallment(token, installmentId, payload = {}) {
+  const response = await fetch(`${API_URL}/lancamentosBase/${installmentId}/pagamento`, {
     method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',

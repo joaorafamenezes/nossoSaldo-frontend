@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react'
 import './App.css'
 import {
   createExpense,
+  createJointAccount,
   createCategory,
   deleteExpense,
   getCategories,
   getExpenseById,
   getExpenses,
+  getJointAccounts,
   getProfile,
   login,
+  payInstallment,
   payExpense,
   requestPasswordReset,
   updateExpense,
@@ -28,6 +31,11 @@ const initialPasswordForm = {
 const initialCategoryForm = {
   descricao: '',
   iconName: '🏷️',
+}
+
+const initialJointAccountForm = {
+  nomeConta: '',
+  usuarioConjunto: '',
 }
 
 const CATEGORY_ICON_OPTIONS = [
@@ -75,7 +83,7 @@ function getCurrentMonthRange() {
     dateFrom: firstDay.toISOString().slice(0, 10),
     dateTo: lastDay.toISOString().slice(0, 10),
     status: 'abertos',
-    tipo: 'despesa',
+    tipo: 'todos',
   }
 }
 
@@ -85,6 +93,7 @@ const initialExpenseForm = {
   status: 'pendente',
   origemLancamento: 'unico',
   numeroParcelas: '2',
+  naoCompartilhar: false,
   valor: '',
   competencia: '',
   dataVencimento: '',
@@ -137,6 +146,7 @@ function normalizeExpenseForm(expense) {
     status: expense.status ?? 'pendente',
     origemLancamento: expense.origemLancamento ?? 'unico',
     numeroParcelas: expense.numeroParcelas != null ? String(expense.numeroParcelas) : '2',
+    naoCompartilhar: Boolean(expense.naoCompartilhar),
     valor: expense.valor != null ? formatCurrencyInput(expense.valor) : '',
     competencia: formatDateForInput(expense.competencia),
     dataVencimento: formatDateForInput(expense.dataVencimento),
@@ -171,6 +181,64 @@ function getEffectiveExpenseStatus(expense) {
   return expense.status
 }
 
+function isDateInRange(value, dateFrom, dateTo) {
+  if (!dateFrom && !dateTo) {
+    return true
+  }
+
+  if (!value) {
+    return false
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return false
+  }
+
+  const dateOnly = date.toISOString().slice(0, 10)
+  const isAfterStart = !dateFrom || dateOnly >= dateFrom
+  const isBeforeEnd = !dateTo || dateOnly <= dateTo
+
+  return isAfterStart && isBeforeEnd
+}
+
+function hasInstallmentDueInRange(expense, dateFrom, dateTo) {
+  if (!Array.isArray(expense.lancamentosBase)) {
+    return false
+  }
+
+  return expense.lancamentosBase.some((installment) => (
+    isDateInRange(installment.dataVencimentoParcela, dateFrom, dateTo)
+  ))
+}
+
+function areAllInstallmentsPaid(expense) {
+  if (expense.origemLancamento !== 'parcelado') {
+    return true
+  }
+
+  if (!Array.isArray(expense.lancamentosBase) || expense.lancamentosBase.length === 0) {
+    return false
+  }
+
+  return expense.lancamentosBase.every((installment) => installment.status === 'pago')
+}
+
+function getExpensePeriodAmount(expense, dateFrom, dateTo) {
+  if (expense.origemLancamento === 'parcelado' && Array.isArray(expense.lancamentosBase)) {
+    return expense.lancamentosBase
+      .filter((installment) => isDateInRange(installment.dataVencimentoParcela, dateFrom, dateTo))
+      .reduce((accumulator, installment) => accumulator + Number(installment.valorParcela ?? 0), 0)
+  }
+
+  if (!isDateInRange(expense.dataVencimento, dateFrom, dateTo)) {
+    return 0
+  }
+
+  return Number(expense.valor ?? 0)
+}
+
 function App() {
   const [form, setForm] = useState(initialForm)
   const [passwordForm, setPasswordForm] = useState(initialPasswordForm)
@@ -184,20 +252,27 @@ function App() {
   const [profile, setProfile] = useState(null)
   const [expenses, setExpenses] = useState([])
   const [categories, setCategories] = useState([])
+  const [jointAccounts, setJointAccounts] = useState([])
   const [categoryForm, setCategoryForm] = useState(initialCategoryForm)
+  const [jointAccountForm, setJointAccountForm] = useState(initialJointAccountForm)
   const [expenseForm, setExpenseForm] = useState(initialExpenseForm)
   const [isLoadingExpenses, setIsLoadingExpenses] = useState(false)
   const [isLoadingCategories, setIsLoadingCategories] = useState(false)
+  const [isLoadingJointAccounts, setIsLoadingJointAccounts] = useState(false)
+  const [isSavingJointAccount, setIsSavingJointAccount] = useState(false)
   const [isSavingCategory, setIsSavingCategory] = useState(false)
   const [isPayingExpense, setIsPayingExpense] = useState(false)
+  const [isPayingInstallment, setIsPayingInstallment] = useState(false)
   const [isDeletingExpense, setIsDeletingExpense] = useState(false)
   const [isLoadingExpenseDetails, setIsLoadingExpenseDetails] = useState(false)
   const [isSavingExpense, setIsSavingExpense] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState(null)
+  const [selectedInstallment, setSelectedInstallment] = useState(null)
   const [expenseModalMode, setExpenseModalMode] = useState(null)
   const [expenseSuccessMessage, setExpenseSuccessMessage] = useState('')
   const [expenseFilters, setExpenseFilters] = useState(() => getCurrentMonthRange())
   const [expandedCategoryIds, setExpandedCategoryIds] = useState({})
+  const [expandedInstallmentIds, setExpandedInstallmentIds] = useState({})
   const [route, setRoute] = useState(() => window.location.pathname)
   const [search, setSearch] = useState(() => window.location.search)
   const [dashboardSection, setDashboardSection] = useState('gastos')
@@ -229,6 +304,7 @@ function App() {
       setProfile(null)
       setExpenses([])
       setCategories([])
+      setJointAccounts([])
       return
     }
 
@@ -365,6 +441,47 @@ function App() {
   }, [token, profile, isDashboardRoute, dashboardSection])
 
   useEffect(() => {
+    if (!token || !profile || !isDashboardRoute || dashboardSection !== 'conta-conjunta') {
+      return
+    }
+
+    let isMounted = true
+
+    const hydrateJointAccounts = async () => {
+      setIsLoadingJointAccounts(true)
+
+      try {
+        const response = await getJointAccounts(token)
+
+        if (!isMounted) {
+          return
+        }
+
+        setJointAccounts(Array.isArray(response) ? response : [])
+      } catch (error) {
+        if (!isMounted) {
+          return
+        }
+
+        setStatus({
+          type: 'error',
+          message: error.message || 'Nao foi possivel carregar a conta conjunta.',
+        })
+      } finally {
+        if (isMounted) {
+          setIsLoadingJointAccounts(false)
+        }
+      }
+    }
+
+    hydrateJointAccounts()
+
+    return () => {
+      isMounted = false
+    }
+  }, [token, profile, isDashboardRoute, dashboardSection])
+
+  useEffect(() => {
     if (!token || !profile || !isExpenseCreateRoute) {
       return
     }
@@ -375,7 +492,10 @@ function App() {
       setIsLoadingExpenseDetails(true)
 
       try {
-        const categoriesResponse = categories.length === 0 ? await getCategories(token) : categories
+        const [categoriesResponse, jointAccountsResponse] = await Promise.all([
+          categories.length === 0 ? getCategories(token) : Promise.resolve(categories),
+          jointAccounts.length === 0 ? getJointAccounts(token) : Promise.resolve(jointAccounts),
+        ])
 
         if (!isMounted) {
           return
@@ -385,6 +505,10 @@ function App() {
 
         if (Array.isArray(categoriesResponse)) {
           setCategories(categoriesResponse)
+        }
+
+        if (Array.isArray(jointAccountsResponse)) {
+          setJointAccounts(jointAccountsResponse)
         }
       } catch (error) {
         if (!isMounted) {
@@ -407,7 +531,7 @@ function App() {
     return () => {
       isMounted = false
     }
-  }, [token, profile, isExpenseCreateRoute, categories])
+  }, [token, profile, isExpenseCreateRoute, categories, jointAccounts])
 
   useEffect(() => {
     if (!token || !profile || !isExpenseEditRoute || !editingExpenseId) {
@@ -420,9 +544,10 @@ function App() {
       setIsLoadingExpenseDetails(true)
 
       try {
-        const [expenseResponse, categoriesResponse] = await Promise.all([
+        const [expenseResponse, categoriesResponse, jointAccountsResponse] = await Promise.all([
           getExpenseById(token, editingExpenseId),
           categories.length === 0 ? getCategories(token) : Promise.resolve(categories),
+          jointAccounts.length === 0 ? getJointAccounts(token) : Promise.resolve(jointAccounts),
         ])
 
         if (!isMounted) {
@@ -433,6 +558,10 @@ function App() {
 
         if (Array.isArray(categoriesResponse)) {
           setCategories(categoriesResponse)
+        }
+
+        if (Array.isArray(jointAccountsResponse)) {
+          setJointAccounts(jointAccountsResponse)
         }
       } catch (error) {
         if (!isMounted) {
@@ -455,7 +584,7 @@ function App() {
     return () => {
       isMounted = false
     }
-  }, [token, profile, isExpenseEditRoute, editingExpenseId, categories])
+  }, [token, profile, isExpenseEditRoute, editingExpenseId, categories, jointAccounts])
 
   const handleChange = ({ target }) => {
     const { name, value } = target
@@ -472,8 +601,13 @@ function App() {
     setCategoryForm((current) => ({ ...current, [name]: value }))
   }
 
-  const handleExpenseFormChange = ({ target }) => {
+  const handleJointAccountChange = ({ target }) => {
     const { name, value } = target
+    setJointAccountForm((current) => ({ ...current, [name]: value }))
+  }
+
+  const handleExpenseFormChange = ({ target }) => {
+    const { checked, name, type, value } = target
     setExpenseForm((current) => {
       if (name === 'origemLancamento') {
         return {
@@ -485,7 +619,7 @@ function App() {
 
       return {
         ...current,
-        [name]: name === 'valor' ? formatCurrencyInput(value) : value,
+        [name]: type === 'checkbox' ? checked : name === 'valor' ? formatCurrencyInput(value) : value,
       }
     })
   }
@@ -527,53 +661,21 @@ function App() {
       return false
     }
 
-    if (!expenseFilters.dateFrom && !expenseFilters.dateTo) {
-      return true
-    }
-
-    if (!expense.dataVencimento) {
-      return false
-    }
-
-    const dueDate = new Date(expense.dataVencimento)
-
-    if (Number.isNaN(dueDate.getTime())) {
-      return false
-    }
-
-    const dueDateOnly = dueDate.toISOString().slice(0, 10)
-    const isAfterStart = !expenseFilters.dateFrom || dueDateOnly >= expenseFilters.dateFrom
-    const isBeforeEnd = !expenseFilters.dateTo || dueDateOnly <= expenseFilters.dateTo
-
-    return isAfterStart && isBeforeEnd
+    return (
+      isDateInRange(expense.dataVencimento, expenseFilters.dateFrom, expenseFilters.dateTo) ||
+      hasInstallmentDueInRange(expense, expenseFilters.dateFrom, expenseFilters.dateTo)
+    )
   })
-  const periodExpenses = expenses.filter((expense) => {
-    if (!expenseFilters.dateFrom && !expenseFilters.dateTo) {
-      return true
-    }
-
-    if (!expense.dataVencimento) {
-      return false
-    }
-
-    const dueDate = new Date(expense.dataVencimento)
-
-    if (Number.isNaN(dueDate.getTime())) {
-      return false
-    }
-
-    const dueDateOnly = dueDate.toISOString().slice(0, 10)
-    const isAfterStart = !expenseFilters.dateFrom || dueDateOnly >= expenseFilters.dateFrom
-    const isBeforeEnd = !expenseFilters.dateTo || dueDateOnly <= expenseFilters.dateTo
-
-    return isAfterStart && isBeforeEnd
-  })
-  const filteredRevenueValue = periodExpenses
+  const filteredRevenueValue = filteredExpenses
     .filter((expense) => expense.tipo === 'receita')
-    .reduce((accumulator, expense) => accumulator + Number(expense.valor ?? 0), 0)
-  const filteredCostValue = periodExpenses
+    .reduce((accumulator, expense) => (
+      accumulator + getExpensePeriodAmount(expense, expenseFilters.dateFrom, expenseFilters.dateTo)
+    ), 0)
+  const filteredCostValue = filteredExpenses
     .filter((expense) => expense.tipo === 'despesa')
-    .reduce((accumulator, expense) => accumulator + Number(expense.valor ?? 0), 0)
+    .reduce((accumulator, expense) => (
+      accumulator + getExpensePeriodAmount(expense, expenseFilters.dateFrom, expenseFilters.dateTo)
+    ), 0)
   const filteredBalanceValue = filteredRevenueValue - filteredCostValue
   const groupedExpenses = filteredExpenses.reduce((groups, expense) => {
     const category = categories.find((item) => item.id === expense.categoriaId)
@@ -587,7 +689,7 @@ function App() {
     }
 
     currentGroup.expenses.push(expense)
-    currentGroup.total += Number(expense.valor ?? 0)
+    currentGroup.total += getExpensePeriodAmount(expense, expenseFilters.dateFrom, expenseFilters.dateTo)
     groups.set(categoryId, currentGroup)
 
     return groups
@@ -598,6 +700,13 @@ function App() {
     setExpandedCategoryIds((current) => ({
       ...current,
       [categoryId]: current[categoryId] === false,
+    }))
+  }
+
+  const toggleExpenseInstallments = (expenseId) => {
+    setExpandedInstallmentIds((current) => ({
+      ...current,
+      [expenseId]: !current[expenseId],
     }))
   }
 
@@ -687,6 +796,7 @@ function App() {
     setProfile(null)
     setExpenses([])
     setCategories([])
+    setJointAccounts([])
     setStatus({
       type: 'idle',
       message: 'Sessao encerrada. Entre novamente quando quiser.',
@@ -775,6 +885,47 @@ function App() {
     }
   }
 
+  const handleJointAccountSubmit = async (event) => {
+    event.preventDefault()
+
+    if (!token) {
+      setStatus({
+        type: 'error',
+        message: 'Sua sessao expirou. Entre novamente para criar a conta conjunta.',
+      })
+      navigateTo('/')
+      return
+    }
+
+    setIsSavingJointAccount(true)
+    setStatus({
+      type: 'loading',
+      message: `Criando vinculo "${jointAccountForm.nomeConta}"...`,
+    })
+
+    try {
+      await createJointAccount(token, {
+        nomeConta: jointAccountForm.nomeConta,
+        usuarioConjunto: jointAccountForm.usuarioConjunto,
+      })
+      const updatedJointAccounts = await getJointAccounts(token)
+
+      setJointAccounts(Array.isArray(updatedJointAccounts) ? updatedJointAccounts : [])
+      setJointAccountForm(initialJointAccountForm)
+      setStatus({
+        type: 'success',
+        message: `Conta conjunta "${jointAccountForm.nomeConta}" criada com sucesso.`,
+      })
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel criar a conta conjunta.',
+      })
+    } finally {
+      setIsSavingJointAccount(false)
+    }
+  }
+
   const openPayExpenseModal = (expense) => {
     setSelectedExpense(expense)
     setExpenseModalMode('pay')
@@ -792,6 +943,22 @@ function App() {
 
     setSelectedExpense(null)
     setExpenseModalMode(null)
+  }
+
+  const openPayInstallmentModal = (expense, installment) => {
+    if (installment.status === 'pago') {
+      return
+    }
+
+    setSelectedInstallment({ expense, installment })
+  }
+
+  const closePayInstallmentModal = () => {
+    if (isPayingInstallment) {
+      return
+    }
+
+    setSelectedInstallment(null)
   }
 
   const handlePayExpense = async () => {
@@ -821,6 +988,51 @@ function App() {
       })
     } finally {
       setIsPayingExpense(false)
+    }
+  }
+
+  const handlePayInstallment = async () => {
+    if (!selectedInstallment || !token) {
+      return
+    }
+
+    setIsPayingInstallment(true)
+    setStatus({
+      type: 'loading',
+      message: `Pagando a parcela ${selectedInstallment.installment.numeroParcela}...`,
+    })
+
+    try {
+      const paidInstallment = await payInstallment(token, selectedInstallment.installment.id, {
+        dataPagamento: new Date().toISOString(),
+      })
+
+      setExpenses((current) => current.map((expense) => {
+        if (expense.id !== selectedInstallment.expense.id) {
+          return expense
+        }
+
+        return {
+          ...expense,
+          lancamentosBase: Array.isArray(expense.lancamentosBase)
+            ? expense.lancamentosBase.map((installment) => (
+              installment.id === paidInstallment.id ? paidInstallment : installment
+            ))
+            : expense.lancamentosBase,
+        }
+      }))
+      setStatus({
+        type: 'success',
+        message: `Parcela ${paidInstallment.numeroParcela} paga com sucesso.`,
+      })
+      setSelectedInstallment(null)
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel pagar a parcela.',
+      })
+    } finally {
+      setIsPayingInstallment(false)
     }
   }
 
@@ -865,6 +1077,7 @@ function App() {
       descricao: expenseForm.descricao,
       tipo: expenseForm.tipo,
       status: expenseForm.status,
+      naoCompartilhar: jointAccounts.length > 0 ? expenseForm.naoCompartilhar : false,
       valor: parseCurrencyInput(expenseForm.valor),
       competencia: expenseForm.competencia || null,
       dataVencimento: expenseForm.dataVencimento || null,
@@ -922,6 +1135,7 @@ function App() {
       status: expenseForm.status,
       origemLancamento: expenseForm.origemLancamento,
       numeroParcelas: expenseForm.origemLancamento === 'parcelado' ? Number(expenseForm.numeroParcelas) : 1,
+      naoCompartilhar: jointAccounts.length > 0 ? expenseForm.naoCompartilhar : false,
       valor: parseCurrencyInput(expenseForm.valor),
       competencia: expenseForm.competencia || null,
       dataVencimento: expenseForm.dataVencimento || null,
@@ -984,7 +1198,7 @@ function App() {
       {!isDashboardRoute ? (
         <section className="brand-panel">
           <div className="brand-copy">
-          <span className="eyebrow">NossoSaldo</span>
+          <span className="eyebrow">Nosso Saldo</span>
           <h1>Seu financeiro compartilhado com clareza, calma e controle.</h1>
           <p className="lead">
             Organize receitas e despesas em um so lugar, acompanhe compromissos do periodo e tenha mais transparencia na gestao financeira compartilhada.
@@ -1100,7 +1314,7 @@ function App() {
                 <aside className="dashboard-sidebar">
                   <div className="dashboard-sidebar-brand">
                     <span className="eyebrow">Workspace</span>
-                    <strong>NossoSaldo</strong>
+                    <strong>Nosso Saldo</strong>
                     <p>{profile.email}</p>
                   </div>
 
@@ -1125,8 +1339,15 @@ function App() {
                     >
                       Categorias
                     </button>
-                    <button type="button" className="dashboard-nav-item dashboard-nav-item-muted">
-                      Contas conjuntas
+                    <button
+                      type="button"
+                      className={`dashboard-nav-item ${dashboardSection === 'conta-conjunta' ? 'dashboard-nav-item-active' : ''}`}
+                      onClick={() => {
+                        setDashboardSection('conta-conjunta')
+                        navigateTo('/dashboard')
+                      }}
+                    >
+                      Conta Conjunta
                     </button>
                     <button type="button" className="dashboard-nav-item dashboard-nav-item-muted">
                       Relatorios
@@ -1225,6 +1446,21 @@ function App() {
                               </select>
                             </label>
 
+                            {jointAccounts.length > 0 ? (
+                              <label className="share-toggle-field">
+                                <input
+                                  type="checkbox"
+                                  name="naoCompartilhar"
+                                  checked={expenseForm.naoCompartilhar}
+                                  onChange={handleExpenseFormChange}
+                                />
+                                <span>
+                                  <strong>Nao compartilhar este gasto</strong>
+                                  <small>Marque para manter este registro somente na sua conta.</small>
+                                </span>
+                              </label>
+                            ) : null}
+
                             {isExpenseCreateRoute ? (
                               <label className="field">
                                 <span>Forma de lancamento</span>
@@ -1279,7 +1515,13 @@ function App() {
 
                             <label className="field">
                               <span>Vencimento</span>
-                              <input type="date" name="dataVencimento" value={expenseForm.dataVencimento} onChange={handleExpenseFormChange} />
+                              <input
+                                type="date"
+                                name="dataVencimento"
+                                value={expenseForm.dataVencimento}
+                                onChange={handleExpenseFormChange}
+                                required={isExpenseCreateRoute && expenseForm.origemLancamento === 'parcelado'}
+                              />
                             </label>
                           </div>
 
@@ -1382,7 +1624,7 @@ function App() {
                       ) : filteredExpenses.length === 0 ? (
                         <div className="dashboard-empty-state">
                           <strong>Nenhum gasto encontrado no periodo</strong>
-                          <p>O filtro considera a data de vencimento e, por padrao, mostra apenas os gastos com vencimento entre o primeiro e o ultimo dia do mes atual.</p>
+                          <p>O filtro considera o vencimento do gasto e tambem o vencimento das parcelas vinculadas.</p>
                         </div>
                       ) : (
                         <div className="expense-tree">
@@ -1415,74 +1657,133 @@ function App() {
                                   <div className="expense-list">
                                     {group.expenses.map((expense) => {
                                       const effectiveStatus = getEffectiveExpenseStatus(expense)
+                                      const installments = Array.isArray(expense.lancamentosBase)
+                                        ? expense.lancamentosBase
+                                        : []
+                                      const hasInstallments = expense.origemLancamento === 'parcelado' && installments.length > 0
+                                      const canManageExpense = expense.responsavelId === profile.id
+                                      const expenseOwnerLabel = canManageExpense
+                                        ? 'Responsavel: voce'
+                                        : `Responsavel: ${expense.responsavelNome || 'usuario compartilhado'}`
+                                      const canPayExpense = canManageExpense && effectiveStatus !== 'pago' && areAllInstallmentsPaid(expense)
+                                      const isInstallmentsExpanded = Boolean(expandedInstallmentIds[expense.id])
 
                                       return (
-                                        <article
-                                          key={expense.id}
-                                          className="expense-card expense-card-clickable"
-                                          onClick={() => navigateToExpenseEdit(expense.id)}
-                                        >
-                                          <div className="expense-card-main">
-                                            <div>
-                                              <div className="expense-card-badges">
-                                                <span className={`expense-badge expense-badge-${expense.tipo}`}>{expense.tipo}</span>
-                                                {effectiveStatus === 'pago' ? (
-                                                  <span className="expense-paid-label">Quitado</span>
-                                                ) : effectiveStatus === 'atrasado' ? (
-                                                  <span className="expense-overdue-label">Atrasado</span>
-                                                ) : null}
+                                        <article key={expense.id} className="expense-card">
+                                          <div
+                                            className="expense-card-clickable"
+                                            onClick={() => navigateToExpenseEdit(expense.id)}
+                                          >
+                                            <div className="expense-card-main">
+                                              <div>
+                                                <div className="expense-card-badges">
+                                                  <span className={`expense-badge expense-badge-${expense.tipo}`}>{expense.tipo}</span>
+                                                  {effectiveStatus === 'pago' ? (
+                                                    <span className="expense-paid-label">Quitado</span>
+                                                  ) : effectiveStatus === 'atrasado' ? (
+                                                    <span className="expense-overdue-label">Atrasado</span>
+                                                  ) : null}
+                                                </div>
+                                                <h5>{expense.descricao}</h5>
+                                                <p>
+                                                  Status: {effectiveStatus} {expense.competencia ? ` - Competencia ${dateFormatter.format(new Date(expense.competencia))}` : ''}
+                                                </p>
                                               </div>
-                                              <h5>{expense.descricao}</h5>
-                                              <p>
-                                                Status: {effectiveStatus} {expense.competencia ? ` - Competencia ${dateFormatter.format(new Date(expense.competencia))}` : ''}
-                                              </p>
+                                              <div className="expense-card-side">
+                                                <strong>{currencyFormatter.format(Number(expense.valor ?? 0))}</strong>
+                                                <div className="expense-card-actions">
+                                                  {canPayExpense ? (
+                                                    <button
+                                                      type="button"
+                                                      className="pay-expense-button"
+                                                      onClick={(event) => {
+                                                        event.stopPropagation()
+                                                        openPayExpenseModal(expense)
+                                                      }}
+                                                    >
+                                                      Quitar
+                                                    </button>
+                                                  ) : null}
+                                                  {canManageExpense ? (
+                                                    <button
+                                                      type="button"
+                                                      className="delete-expense-button"
+                                                      onClick={(event) => {
+                                                        event.stopPropagation()
+                                                        openDeleteExpenseModal(expense)
+                                                      }}
+                                                    >
+                                                      Excluir
+                                                    </button>
+                                                  ) : null}
+                                                  {hasInstallments ? (
+                                                    <button
+                                                      type="button"
+                                                      className="installment-toggle-button"
+                                                      onClick={(event) => {
+                                                        event.stopPropagation()
+                                                        toggleExpenseInstallments(expense.id)
+                                                      }}
+                                                      aria-label={isInstallmentsExpanded ? 'Ocultar parcelas' : 'Exibir parcelas'}
+                                                      title={isInstallmentsExpanded ? 'Ocultar parcelas' : 'Exibir parcelas'}
+                                                    >
+                                                      {isInstallmentsExpanded ? '-' : '+'}
+                                                    </button>
+                                                  ) : null}
+                                                </div>
+                                              </div>
                                             </div>
-                                            <div className="expense-card-side">
-                                              <strong>{currencyFormatter.format(Number(expense.valor ?? 0))}</strong>
-                                              <div className="expense-card-actions">
-                                                {effectiveStatus !== 'pago' ? (
-                                                  <button
-                                                    type="button"
-                                                    className="pay-expense-button"
-                                                    onClick={(event) => {
-                                                      event.stopPropagation()
-                                                      openPayExpenseModal(expense)
-                                                    }}
-                                                  >
-                                                    Quitar
-                                                  </button>
-                                                ) : null}
+                                            <div className="expense-card-meta">
+                                              <span>
+                                                Origem: {expense.origemLancamento}
+                                                {expense.origemLancamento === 'parcelado' && expense.numeroParcelas
+                                                  ? ` - ${expense.numeroParcelas} parcelas`
+                                                  : ''}
+                                              </span>
+                                              <span>{expenseOwnerLabel}</span>
+                                              <span>
+                                                {expense.dataVencimento
+                                                  ? `Vencimento: ${dateFormatter.format(new Date(expense.dataVencimento))}`
+                                                  : 'Sem vencimento informado'}
+                                              </span>
+                                              <span>
+                                                {expense.dataPagamento
+                                                  ? `Pagamento: ${dateFormatter.format(new Date(expense.dataPagamento))}`
+                                                  : 'Pagamento pendente'}
+                                              </span>
+                                            </div>
+                                          </div>
+                                          {hasInstallments && isInstallmentsExpanded ? (
+                                            <div className="installment-list">
+                                              {installments.map((installment) => (
                                                 <button
+                                                  key={installment.id}
                                                   type="button"
-                                                  className="delete-expense-button"
-                                                  onClick={(event) => {
-                                                    event.stopPropagation()
-                                                    openDeleteExpenseModal(expense)
-                                                  }}
+                                                  className={`installment-row ${installment.status === 'pago' ? 'installment-row-paid' : ''}`}
+                                                  onClick={() => openPayInstallmentModal(expense, installment)}
+                                                  disabled={installment.status === 'pago' || !canManageExpense}
                                                 >
-                                                  Excluir
+                                                  <span className="installment-number">
+                                                    Parcela {installment.numeroParcela}/{expense.numeroParcelas}
+                                                  </span>
+                                                  <span>{currencyFormatter.format(Number(installment.valorParcela ?? 0))}</span>
+                                                  <span>
+                                                    {installment.dataVencimentoParcela
+                                                      ? `Vencimento ${dateFormatter.format(new Date(installment.dataVencimentoParcela))}`
+                                                      : 'Sem vencimento'}
+                                                  </span>
+                                                  <span>
+                                                    {installment.competencia
+                                                      ? `Competencia ${dateFormatter.format(new Date(installment.competencia))}`
+                                                      : 'Sem competencia'}
+                                                  </span>
+                                                  <span className={`installment-status ${installment.status === 'pago' ? 'installment-status-paid' : ''}`}>
+                                                    {installment.status === 'pago' ? 'Pago' : installment.status}
+                                                  </span>
                                                 </button>
-                                              </div>
+                                              ))}
                                             </div>
-                                          </div>
-                                          <div className="expense-card-meta">
-                                            <span>
-                                              Origem: {expense.origemLancamento}
-                                              {expense.origemLancamento === 'parcelado' && expense.numeroParcelas
-                                                ? ` - ${expense.numeroParcelas} parcelas`
-                                                : ''}
-                                            </span>
-                                            <span>
-                                              {expense.dataVencimento
-                                                ? `Vencimento: ${dateFormatter.format(new Date(expense.dataVencimento))}`
-                                                : 'Sem vencimento informado'}
-                                            </span>
-                                            <span>
-                                              {expense.dataPagamento
-                                                ? `Pagamento: ${dateFormatter.format(new Date(expense.dataPagamento))}`
-                                                : 'Pagamento pendente'}
-                                            </span>
-                                          </div>
+                                          ) : null}
                                         </article>
                                       )
                                     })}
@@ -1584,6 +1885,110 @@ function App() {
                                   <span className="category-id">#{category.id.slice(0, 8)}</span>
                                 </article>
                               ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {dashboardSection === 'conta-conjunta' ? (
+                    <section className="dashboard-expenses">
+                      <div className="dashboard-section-header">
+                        <div>
+                          <span className="feature-label">Compartilhamento</span>
+                          <h4>Conta Conjunta</h4>
+                        </div>
+                      </div>
+
+                      <div className={`joint-account-layout ${jointAccounts.length > 0 ? 'joint-account-layout-single' : ''}`}>
+                        {jointAccounts.length === 0 ? (
+                          <form className="joint-account-form-card" onSubmit={handleJointAccountSubmit}>
+                            <label className="field">
+                              <span>Nome da conta</span>
+                              <input
+                                type="text"
+                                name="nomeConta"
+                                placeholder="Ex.: Casa, Casal, Apartamento"
+                                minLength={2}
+                                value={jointAccountForm.nomeConta}
+                                onChange={handleJointAccountChange}
+                                required
+                              />
+                            </label>
+
+                            <label className="field">
+                              <span>E-mail da outra pessoa</span>
+                              <input
+                                type="email"
+                                name="usuarioConjunto"
+                                placeholder="parceiro@exemplo.com"
+                                autoComplete="email"
+                                value={jointAccountForm.usuarioConjunto}
+                                onChange={handleJointAccountChange}
+                                required
+                              />
+                            </label>
+
+                            <button type="submit" className="primary-button" disabled={isSavingJointAccount}>
+                              {isSavingJointAccount ? 'Criando...' : 'Criar vinculo'}
+                            </button>
+                          </form>
+                        ) : null}
+
+                        <div>
+                          {isLoadingJointAccounts ? (
+                            <div className="dashboard-empty-state">
+                              <strong>Carregando conta conjunta...</strong>
+                              <p>Aguarde enquanto buscamos os dados vinculados ao usuario logado.</p>
+                            </div>
+                          ) : jointAccounts.length === 0 ? (
+                            <div className="dashboard-empty-state">
+                              <strong>Nenhuma conta conjunta encontrada</strong>
+                              <p>Crie o primeiro vinculo usando o formulario ao lado.</p>
+                            </div>
+                          ) : (
+                            <div className="joint-account-list">
+                              {jointAccounts.map((account) => {
+                                const firstUser = account.usuario1
+                                const secondUser = account.usuario2
+                                const partner = firstUser?.id === profile.id ? secondUser : firstUser
+
+                                return (
+                                  <article key={account.id} className="joint-account-card">
+                                    <div className="joint-account-card-header">
+                                      <div>
+                                        <span className="feature-label">Conta compartilhada</span>
+                                        <h5>{account.nomeConta}</h5>
+                                      </div>
+                                      <span className="category-id">#{account.id.slice(0, 8)}</span>
+                                    </div>
+
+                                    <div className="joint-account-users">
+                                      <div className="joint-account-user">
+                                        <span>Usuario logado</span>
+                                        <strong>{profile.nome}</strong>
+                                        <p>{profile.email}</p>
+                                      </div>
+                                      <div className="joint-account-user">
+                                        <span>Compartilhada com</span>
+                                        <strong>{partner?.nome || 'Usuario vinculado'}</strong>
+                                        <p>{partner?.email || 'E-mail nao informado'}</p>
+                                      </div>
+                                    </div>
+
+                                    <div className="joint-account-meta">
+                                      <span>
+                                        Criada em{' '}
+                                        {account.createdAt
+                                          ? dateFormatter.format(new Date(account.createdAt))
+                                          : 'data nao informada'}
+                                      </span>
+                                      <span>2 participantes</span>
+                                    </div>
+                                  </article>
+                                )
+                              })}
                             </div>
                           )}
                         </div>
@@ -1697,6 +2102,47 @@ function App() {
                 {expenseModalMode === 'delete'
                   ? (isDeletingExpense ? 'Excluindo...' : 'Confirmar exclusao')
                   : (isPayingExpense ? 'Quitando...' : 'Confirmar quitacao')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedInstallment ? (
+        <div className="modal-overlay" role="presentation" onClick={closePayInstallmentModal}>
+          <div
+            className="confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-pay-installment-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className="feature-label">Confirmacao</span>
+            <h3 id="confirm-pay-installment-title">Pagar parcela</h3>
+            <p>
+              Deseja confirmar o pagamento da parcela{' '}
+              <strong>
+                {selectedInstallment.installment.numeroParcela}/{selectedInstallment.expense.numeroParcelas}
+              </strong>{' '}
+              de <strong>{selectedInstallment.expense.descricao}</strong> no valor de{' '}
+              <strong>{currencyFormatter.format(Number(selectedInstallment.installment.valorParcela ?? 0))}</strong>?
+            </p>
+            <div className="confirm-modal-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={closePayInstallmentModal}
+                disabled={isPayingInstallment}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={handlePayInstallment}
+                disabled={isPayingInstallment}
+              >
+                {isPayingInstallment ? 'Pagando...' : 'Confirmar pagamento'}
               </button>
             </div>
           </div>
