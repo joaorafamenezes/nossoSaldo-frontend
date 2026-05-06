@@ -4,6 +4,7 @@ import {
   createExpense,
   createJointAccount,
   createCategory,
+  createUser,
   deleteExpense,
   getCategories,
   getExpenseById,
@@ -14,13 +15,22 @@ import {
   payInstallment,
   payExpense,
   requestPasswordReset,
+  unlinkJointAccount,
   updateExpense,
   updatePassword,
+  validateEmail,
 } from './services/api'
 
 const initialForm = {
   email: '',
   senha: '',
+}
+
+const initialRegisterForm = {
+  nome: '',
+  email: '',
+  senha: '',
+  confirmarSenha: '',
 }
 
 const initialPasswordForm = {
@@ -116,6 +126,19 @@ function formatCurrencyInput(value) {
   }).format(numberValue)
 }
 
+function formatCurrencyAmount(value) {
+  const numberValue = Number(value)
+
+  if (!Number.isFinite(numberValue)) {
+    return ''
+  }
+
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(numberValue)
+}
+
 function parseCurrencyInput(value) {
   if (!value) {
     return 0
@@ -147,7 +170,7 @@ function normalizeExpenseForm(expense) {
     origemLancamento: expense.origemLancamento ?? 'unico',
     numeroParcelas: expense.numeroParcelas != null ? String(expense.numeroParcelas) : '2',
     naoCompartilhar: Boolean(expense.naoCompartilhar),
-    valor: expense.valor != null ? formatCurrencyInput(expense.valor) : '',
+    valor: expense.valor != null ? formatCurrencyAmount(expense.valor) : '',
     competencia: formatDateForInput(expense.competencia),
     dataVencimento: formatDateForInput(expense.dataVencimento),
     observacao: expense.observacao ?? '',
@@ -241,12 +264,14 @@ function getExpensePeriodAmount(expense, dateFrom, dateTo) {
 
 function App() {
   const [form, setForm] = useState(initialForm)
+  const [registerForm, setRegisterForm] = useState(initialRegisterForm)
   const [passwordForm, setPasswordForm] = useState(initialPasswordForm)
   const [status, setStatus] = useState({
     type: 'idle',
     message: 'Entre com seu e-mail e senha para acessar seu painel financeiro.',
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isRegistering, setIsRegistering] = useState(false)
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
   const [token, setToken] = useState(() => localStorage.getItem('nossosaldo.token') ?? '')
   const [profile, setProfile] = useState(null)
@@ -264,10 +289,14 @@ function App() {
   const [isPayingExpense, setIsPayingExpense] = useState(false)
   const [isPayingInstallment, setIsPayingInstallment] = useState(false)
   const [isDeletingExpense, setIsDeletingExpense] = useState(false)
+  const [isUnlinkingJointAccount, setIsUnlinkingJointAccount] = useState(false)
   const [isLoadingExpenseDetails, setIsLoadingExpenseDetails] = useState(false)
   const [isSavingExpense, setIsSavingExpense] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState(null)
   const [selectedInstallment, setSelectedInstallment] = useState(null)
+  const [selectedJointAccount, setSelectedJointAccount] = useState(null)
+  const [loginErrorMessage, setLoginErrorMessage] = useState('')
+  const [jointAccountErrorMessage, setJointAccountErrorMessage] = useState('')
   const [expenseModalMode, setExpenseModalMode] = useState(null)
   const [expenseSuccessMessage, setExpenseSuccessMessage] = useState('')
   const [expenseFilters, setExpenseFilters] = useState(() => getCurrentMonthRange())
@@ -279,6 +308,9 @@ function App() {
   const resetParams = new URLSearchParams(search)
   const recoveryToken = resetParams.get('token') ?? ''
   const isPasswordResetRoute = route === '/redefinir-senha' || route === '/trocar-senha'
+  const isRegisterRoute = route === '/cadastro'
+  const isEmailValidationRoute = route === '/validar-email'
+  const emailValidationToken = isEmailValidationRoute ? recoveryToken : ''
   const isRecoveryFlow = isPasswordResetRoute && Boolean(recoveryToken)
   const isExpenseCreateRoute = route === '/dashboard/gastos/novo'
   const expenseEditMatch = route.match(/^\/dashboard\/gastos\/([^/]+)$/)
@@ -591,6 +623,11 @@ function App() {
     setForm((current) => ({ ...current, [name]: value }))
   }
 
+  const handleRegisterChange = ({ target }) => {
+    const { name, value } = target
+    setRegisterForm((current) => ({ ...current, [name]: value }))
+  }
+
   const handlePasswordChange = ({ target }) => {
     const { name, value } = target
     setPasswordForm((current) => ({ ...current, [name]: value }))
@@ -762,6 +799,57 @@ function App() {
     }
   }, [token, profile, isDashboardRoute, isPasswordResetRoute, route])
 
+  useEffect(() => {
+    if (!isEmailValidationRoute) {
+      return
+    }
+
+    if (!emailValidationToken) {
+      setStatus({
+        type: 'error',
+        message: 'Link de validacao de email invalido.',
+      })
+      return
+    }
+
+    let isMounted = true
+
+    const confirmEmail = async () => {
+      setStatus({
+        type: 'loading',
+        message: 'Validando seu email...',
+      })
+
+      try {
+        const response = await validateEmail(emailValidationToken)
+
+        if (!isMounted) {
+          return
+        }
+
+        setStatus({
+          type: 'success',
+          message: response.message || 'Email validado com sucesso. Agora voce ja pode entrar.',
+        })
+      } catch (error) {
+        if (!isMounted) {
+          return
+        }
+
+        setStatus({
+          type: 'error',
+          message: error.message || 'Nao foi possivel validar seu email.',
+        })
+      }
+    }
+
+    confirmEmail()
+
+    return () => {
+      isMounted = false
+    }
+  }, [isEmailValidationRoute, emailValidationToken])
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     setIsSubmitting(true)
@@ -775,18 +863,63 @@ function App() {
       localStorage.setItem('nossosaldo.token', response.token)
       setToken(response.token)
       setForm(initialForm)
+      setLoginErrorMessage('')
       setStatus({
         type: 'success',
         message: 'Login realizado com sucesso. Carregando seus dados...',
       })
       navigateTo('/dashboard')
-    } catch (error) {
+    } catch {
+      const userMessage = 'Usuário não localizado ou não autorizado. Confira o e-mail e a senha informados.'
+
+      setLoginErrorMessage(userMessage)
       setStatus({
         type: 'error',
-        message: error.message || 'Nao foi possivel entrar agora.',
+        message: userMessage,
       })
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  const handleRegisterSubmit = async (event) => {
+    event.preventDefault()
+
+    if (registerForm.senha !== registerForm.confirmarSenha) {
+      setStatus({
+        type: 'error',
+        message: 'A confirmacao da senha precisa ser igual a senha informada.',
+      })
+      return
+    }
+
+    setIsRegistering(true)
+    setStatus({
+      type: 'loading',
+      message: 'Criando sua conta com seguranca...',
+    })
+
+    try {
+      const usuarioCriado = await createUser({
+        nome: registerForm.nome,
+        email: registerForm.email,
+        senha: registerForm.senha,
+      })
+
+      setRegisterForm(initialRegisterForm)
+      setForm((current) => ({ ...current, email: usuarioCriado.email || registerForm.email, senha: '' }))
+      setStatus({
+        type: 'success',
+        message: 'Conta criada com sucesso. Enviamos um email para voce confirmar seu cadastro antes do primeiro acesso.',
+      })
+      navigateTo('/')
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel criar sua conta agora.',
+      })
+    } finally {
+      setIsRegistering(false)
     }
   }
 
@@ -897,6 +1030,14 @@ function App() {
       return
     }
 
+    if (jointAccounts.length > 0) {
+      setStatus({
+        type: 'error',
+        message: 'Voce ja possui uma conta compartilhada ativa. Desvincule a conta atual antes de criar outra.',
+      })
+      return
+    }
+
     setIsSavingJointAccount(true)
     setStatus({
       type: 'loading',
@@ -917,9 +1058,28 @@ function App() {
         message: `Conta conjunta "${jointAccountForm.nomeConta}" criada com sucesso.`,
       })
     } catch (error) {
+      const updatedJointAccounts = await getJointAccounts(token).catch(() => [])
+
+      if (Array.isArray(updatedJointAccounts) && updatedJointAccounts.length > 0) {
+        setJointAccounts(updatedJointAccounts)
+      }
+
+      const accountNotFoundMessage = 'A conta informada nao foi localizada em nossa base de dados.'
+      const userMessage = error.message === accountNotFoundMessage
+        ? 'A conta informada n\u00e3o foi localizada em nossa base de dados'
+        : error.message || 'Nao foi possivel criar a conta conjunta. Verifique se um dos usuarios ja possui vinculo ativo.'
+
+      setJointAccountErrorMessage(userMessage)
+
       setStatus({
         type: 'error',
-        message: error.message || 'Nao foi possivel criar a conta conjunta.',
+        message: error.message === accountNotFoundMessage
+          ? 'A conta informada não foi localizada em nossa base de dados'
+          : error.message || 'Nao foi possivel criar a conta conjunta. Verifique se um dos usuarios ja possui vinculo ativo.',
+      })
+      setStatus({
+        type: 'error',
+        message: userMessage,
       })
     } finally {
       setIsSavingJointAccount(false)
@@ -959,6 +1119,26 @@ function App() {
     }
 
     setSelectedInstallment(null)
+  }
+
+  const openUnlinkJointAccountModal = (account) => {
+    setSelectedJointAccount(account)
+  }
+
+  const closeUnlinkJointAccountModal = () => {
+    if (isUnlinkingJointAccount) {
+      return
+    }
+
+    setSelectedJointAccount(null)
+  }
+
+  const closeJointAccountErrorModal = () => {
+    setJointAccountErrorMessage('')
+  }
+
+  const closeLoginErrorModal = () => {
+    setLoginErrorMessage('')
   }
 
   const handlePayExpense = async () => {
@@ -1033,6 +1213,42 @@ function App() {
       })
     } finally {
       setIsPayingInstallment(false)
+    }
+  }
+
+  const handleUnlinkJointAccount = async () => {
+    if (!selectedJointAccount || !token) {
+      return
+    }
+
+    setIsUnlinkingJointAccount(true)
+    setStatus({
+      type: 'loading',
+      message: `Desvinculando a conta "${selectedJointAccount.nomeConta}"...`,
+    })
+
+    try {
+      await unlinkJointAccount(token, selectedJointAccount.id)
+      const [updatedJointAccounts, updatedExpenses] = await Promise.all([
+        getJointAccounts(token),
+        getExpenses(token),
+      ])
+
+      setJointAccounts(Array.isArray(updatedJointAccounts) ? updatedJointAccounts : [])
+      setExpenses(Array.isArray(updatedExpenses.gastos) ? updatedExpenses.gastos : [])
+      setSelectedJointAccount(null)
+      setJointAccountForm(initialJointAccountForm)
+      setStatus({
+        type: 'success',
+        message: 'Conta compartilhada desvinculada com sucesso. Agora voce pode criar um novo vinculo ativo.',
+      })
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel desvincular a conta conjunta.',
+      })
+    } finally {
+      setIsUnlinkingJointAccount(false)
     }
   }
 
@@ -1193,6 +1409,37 @@ function App() {
     }
   }
 
+  const handleAuthenticatedResetRequest = async () => {
+    if (!profile?.email) {
+      setStatus({
+        type: 'error',
+        message: 'Nao foi possivel identificar o e-mail do usuario logado.',
+      })
+      return
+    }
+
+    setIsUpdatingPassword(true)
+    setStatus({
+      type: 'loading',
+      message: `Enviando link de redefinicao para ${profile.email}...`,
+    })
+
+    try {
+      const response = await requestPasswordReset(profile.email)
+      setStatus({
+        type: 'success',
+        message: response.message || `Enviamos um link de redefinicao para ${profile.email}.`,
+      })
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel solicitar a redefinicao de senha.',
+      })
+    } finally {
+      setIsUpdatingPassword(false)
+    }
+  }
+
   return (
     <main className={`app-shell ${isDashboardRoute ? 'app-shell-dashboard' : ''}`}>
       {!isDashboardRoute ? (
@@ -1236,6 +1483,10 @@ function App() {
                 ? isRecoveryFlow
                   ? 'Definir nova senha'
                   : 'Solicitar troca de senha'
+                : isEmailValidationRoute
+                  ? 'Validar email'
+                : isRegisterRoute
+                  ? 'Criar sua conta'
                 : isDashboardRoute && profile
                   ? `Dashboard de ${profile.nome}`
                 : profile
@@ -1245,7 +1496,18 @@ function App() {
             <p>{status.message}</p>
           </div>
 
-          {isPasswordResetRoute ? (
+          {isEmailValidationRoute ? (
+            <div className="login-form">
+              <div className="dashboard-empty-state">
+                <strong>{status.type === 'success' ? 'Email confirmado' : 'Confirmacao de email'}</strong>
+                <p>{status.message}</p>
+              </div>
+
+              <button type="button" className="primary-button" onClick={() => navigateTo('/')}>
+                Ir para login
+              </button>
+            </div>
+          ) : isPasswordResetRoute ? (
             isRecoveryFlow ? (
               <form className="login-form" onSubmit={handlePasswordSubmit}>
                 <label className="field">
@@ -1308,6 +1570,73 @@ function App() {
                 </button>
               </form>
             )
+          ) : isRegisterRoute ? (
+            <form className="login-form" onSubmit={handleRegisterSubmit}>
+              <label className="field">
+                <span>Nome</span>
+                <input
+                  type="text"
+                  name="nome"
+                  placeholder="Seu nome"
+                  autoComplete="name"
+                  minLength={2}
+                  value={registerForm.nome}
+                  onChange={handleRegisterChange}
+                  required
+                />
+              </label>
+
+              <label className="field">
+                <span>E-mail</span>
+                <input
+                  type="email"
+                  name="email"
+                  placeholder="joao@exemplo.com"
+                  autoComplete="email"
+                  value={registerForm.email}
+                  onChange={handleRegisterChange}
+                  required
+                />
+              </label>
+
+              <label className="field">
+                <span>Senha</span>
+                <input
+                  type="password"
+                  name="senha"
+                  placeholder="Crie uma senha"
+                  autoComplete="new-password"
+                  minLength={6}
+                  maxLength={50}
+                  value={registerForm.senha}
+                  onChange={handleRegisterChange}
+                  required
+                />
+              </label>
+
+              <label className="field">
+                <span>Confirmar senha</span>
+                <input
+                  type="password"
+                  name="confirmarSenha"
+                  placeholder="Repita a senha"
+                  autoComplete="new-password"
+                  minLength={6}
+                  maxLength={50}
+                  value={registerForm.confirmarSenha}
+                  onChange={handleRegisterChange}
+                  required
+                />
+              </label>
+
+              <button type="submit" className="primary-button" disabled={isRegistering}>
+                {isRegistering ? 'Criando...' : 'Criar conta'}
+              </button>
+
+              <button type="button" className="secondary-button" onClick={() => navigateTo('/')}>
+                Voltar para login
+              </button>
+            </form>
           ) : isDashboardRoute && profile ? (
             <div className="dashboard-layout">
               <div className="dashboard-shell">
@@ -1355,8 +1684,13 @@ function App() {
                   </nav>
 
                   <div className="dashboard-sidebar-actions">
-                    <button type="button" className="secondary-button" onClick={() => navigateTo('/redefinir-senha')}>
-                      Redefinir senha
+                    <button
+                      type="button"
+                      className="secondary-button"
+                      onClick={handleAuthenticatedResetRequest}
+                      disabled={isUpdatingPassword}
+                    >
+                      {isUpdatingPassword ? 'Enviando...' : 'Redefinir senha'}
                     </button>
                     <button type="button" className="secondary-button" onClick={handleLogout}>
                       Encerrar sessao
@@ -1986,6 +2320,20 @@ function App() {
                                       </span>
                                       <span>2 participantes</span>
                                     </div>
+
+                                    <div className="joint-account-actions">
+                                      <button
+                                        type="button"
+                                        className="danger-button joint-account-unlink-button"
+                                        onClick={() => openUnlinkJointAccountModal(account)}
+                                      >
+                                        Desvincular conta
+                                      </button>
+                                      <p>
+                                        Ao desvincular, a regra de uma conta compartilhada ativa por pessoa
+                                        continua preservada e voce podera criar um novo vinculo.
+                                      </p>
+                                    </div>
                                   </article>
                                 )
                               })}
@@ -2011,8 +2359,13 @@ function App() {
               <button type="button" className="primary-button ghost-button" onClick={handleLogout}>
                 Sair da sessao
               </button>
-              <button type="button" className="secondary-button" onClick={() => navigateTo('/redefinir-senha')}>
-                Redefinir senha
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={handleAuthenticatedResetRequest}
+                disabled={isUpdatingPassword}
+              >
+                {isUpdatingPassword ? 'Enviando...' : 'Redefinir senha'}
               </button>
             </div>
           ) : (
@@ -2046,6 +2399,10 @@ function App() {
 
               <button type="submit" className="primary-button" disabled={isSubmitting}>
                 {isSubmitting ? 'Entrando...' : 'Acessar conta'}
+              </button>
+
+              <button type="button" className="secondary-button" onClick={() => navigateTo('/cadastro')}>
+                Criar nova conta
               </button>
 
               <button type="button" className="secondary-button" onClick={() => navigateTo('/redefinir-senha')}>
@@ -2143,6 +2500,96 @@ function App() {
                 disabled={isPayingInstallment}
               >
                 {isPayingInstallment ? 'Pagando...' : 'Confirmar pagamento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedJointAccount ? (
+        <div className="modal-overlay" role="presentation" onClick={closeUnlinkJointAccountModal}>
+          <div
+            className="confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-unlink-joint-account-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className="feature-label">Conta conjunta</span>
+            <h3 id="confirm-unlink-joint-account-title">Desvincular conta compartilhada</h3>
+            <p>
+              Deseja desvincular a conta <strong>{selectedJointAccount.nomeConta}</strong>? Depois disso,
+              os registros compartilhados deixam de aparecer para o outro usuario e voce podera criar um novo
+              vinculo ativo.
+            </p>
+            <div className="confirm-modal-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={closeUnlinkJointAccountModal}
+                disabled={isUnlinkingJointAccount}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="danger-button"
+                onClick={handleUnlinkJointAccount}
+                disabled={isUnlinkingJointAccount}
+              >
+                {isUnlinkingJointAccount ? 'Desvinculando...' : 'Confirmar desvinculacao'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {loginErrorMessage ? (
+        <div className="modal-overlay" role="presentation" onClick={closeLoginErrorModal}>
+          <div
+            className="confirm-modal warning-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="login-error-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className="warning-modal-icon" aria-hidden="true">!</span>
+            <span className="feature-label">Acesso</span>
+            <h3 id="login-error-title">Não foi possível entrar</h3>
+            <p>{loginErrorMessage}</p>
+            <div className="confirm-modal-actions confirm-modal-actions-single">
+              <button
+                type="button"
+                className="primary-button"
+                onClick={closeLoginErrorModal}
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {jointAccountErrorMessage ? (
+        <div className="modal-overlay" role="presentation" onClick={closeJointAccountErrorModal}>
+          <div
+            className="confirm-modal warning-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="joint-account-error-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className="warning-modal-icon" aria-hidden="true">!</span>
+            <span className="feature-label">Conta conjunta</span>
+            <h3 id="joint-account-error-title">Não foi possível criar o vínculo</h3>
+            <p>{jointAccountErrorMessage}</p>
+            <div className="confirm-modal-actions confirm-modal-actions-single">
+              <button
+                type="button"
+                className="primary-button"
+                onClick={closeJointAccountErrorModal}
+              >
+                Entendi
               </button>
             </div>
           </div>

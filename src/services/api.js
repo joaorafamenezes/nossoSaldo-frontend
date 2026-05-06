@@ -34,6 +34,30 @@ export async function login(payload) {
   }
 }
 
+export async function createUser(payload) {
+  const response = await fetch(`${API_URL}/usuarios`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  })
+
+  return parseResponse(response)
+}
+
+export async function validateEmail(token) {
+  const response = await fetch(`${API_URL}/usuarios/validar-email`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ token }),
+  })
+
+  return parseResponse(response)
+}
+
 export async function requestPasswordReset(email) {
   const response = await fetch(`${API_URL}/usuarios/solicitarRedefinicaoSenha`, {
     method: 'POST',
@@ -133,6 +157,18 @@ export async function createJointAccount(token, payload) {
       'x-access-token': token,
     },
     body: JSON.stringify(payload),
+  })
+
+  return parseResponse(response)
+}
+
+export async function unlinkJointAccount(token, accountId) {
+  const response = await fetch(`${API_URL}/contaConjunta/${accountId}`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
   })
 
   return parseResponse(response)
