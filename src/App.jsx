@@ -1,22 +1,34 @@
 import { useEffect, useState } from 'react'
 import './App.css'
+import nossoSaldoLogo from './assets/nossosaldo-logo.png'
 import {
+  createCreditCard,
   createExpense,
   createJointAccount,
   createCategory,
   createUser,
   deleteExpense,
   getCategories,
+  getCreditCards,
+  getCreditCardInvoices,
   getExpenseById,
   getExpenses,
   getJointAccounts,
+  getMonthlyComparisonReport,
+  getMonthlyEvolutionReport,
+  getTopCategoryReport,
+  getWhoSpendsMoreReport,
   getProfile,
   login,
+  payCreditCardInvoice,
   payInstallment,
   payExpense,
+  reopenExpense,
+  reopenCreditCardInvoice,
   requestPasswordReset,
   unlinkJointAccount,
   updateExpense,
+  updateCreditCard,
   updatePassword,
   validateEmail,
 } from './services/api'
@@ -46,6 +58,14 @@ const initialCategoryForm = {
 const initialJointAccountForm = {
   nomeConta: '',
   usuarioConjunto: '',
+}
+
+const initialCreditCardForm = {
+  descricao: '',
+  diaFechamento: '',
+  diaVencimento: '',
+  valorLimite: '',
+  observacoes: '',
 }
 
 const CATEGORY_ICON_OPTIONS = [
@@ -94,21 +114,53 @@ function getCurrentMonthRange() {
     dateTo: lastDay.toISOString().slice(0, 10),
     status: 'abertos',
     tipo: 'todos',
+    cartaoCreditoId: 'todos',
   }
 }
 
-const initialExpenseForm = {
-  descricao: '',
-  tipo: 'despesa',
-  status: 'pendente',
-  origemLancamento: 'unico',
-  numeroParcelas: '2',
-  naoCompartilhar: false,
-  valor: '',
-  competencia: '',
-  dataVencimento: '',
-  observacao: '',
-  categoriaId: '',
+function getDefaultMonthlyReportRange() {
+  const now = new Date()
+  const firstMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1)
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+
+  return {
+    dateFrom: firstMonth.toISOString().slice(0, 10),
+    dateTo: lastMonth.toISOString().slice(0, 10),
+  }
+}
+
+function getDefaultComparisonMonths() {
+  const now = new Date()
+  const currentMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const previousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+
+  return {
+    currentMonth: currentMonth.toISOString().slice(0, 7),
+    previousMonth: previousMonth.toISOString().slice(0, 7),
+  }
+}
+
+function getCurrentCompetenceMonth() {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+}
+
+function getInitialExpenseForm() {
+  return {
+    descricao: '',
+    tipo: 'despesa',
+    status: 'pendente',
+    origemLancamento: 'unico',
+    numeroParcelas: '2',
+    naoCompartilhar: false,
+    valor: '',
+    competencia: getCurrentCompetenceMonth(),
+    dataVencimento: '',
+    dataFimRecorrencia: '',
+    observacao: '',
+    categoriaId: '',
+    cartaoCreditoId: '',
+  }
 }
 
 function formatCurrencyInput(value) {
@@ -162,6 +214,204 @@ function formatDateForInput(value) {
   return date.toISOString().slice(0, 10)
 }
 
+function formatCompetenceForInput(value) {
+  if (!value) {
+    return getCurrentCompetenceMonth()
+  }
+
+  if (typeof value === 'string' && /^\d{4}-\d{2}/.test(value)) {
+    return value.slice(0, 7)
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return getCurrentCompetenceMonth()
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function normalizeCompetenceForPayload(value) {
+  if (!value) {
+    return null
+  }
+
+  if (/^\d{4}-\d{2}$/.test(value)) {
+    return `${value}-01`
+  }
+
+  return value
+}
+
+function formatMonthlyReference(reference) {
+  if (!reference) {
+    return ''
+  }
+
+  const [year, month] = String(reference).split('-')
+
+  if (!year || !month) {
+    return reference
+  }
+
+  const date = new Date(Number(year), Number(month) - 1, 1)
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    month: 'short',
+    year: 'numeric',
+  }).format(date)
+}
+
+function formatCompetenceDisplay(value) {
+  if (!value) {
+    return ''
+  }
+
+  if (typeof value === 'string' && /^\d{4}-\d{2}/.test(value)) {
+    return formatMonthlyReference(value.slice(0, 7))
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return formatMonthlyReference(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`)
+}
+
+function formatDateToIso(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return date.toISOString().slice(0, 10)
+}
+
+function getClampedMonthDay(year, monthIndex, day) {
+  const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate()
+  return Math.min(Math.max(Number(day) || 1, 1), lastDayOfMonth)
+}
+
+function calculateCreditCardInvoiceDueDate(card, referenceDate = new Date()) {
+  const closingDay = Number(card?.diaFechamento)
+  const dueDay = Number(card?.diaVencimento)
+
+  if (!Number.isInteger(closingDay) || !Number.isInteger(dueDay) || closingDay <= 0 || dueDay <= 0) {
+    return null
+  }
+
+  const reference = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    referenceDate.getDate(),
+  )
+  const closingDate = new Date(
+    reference.getFullYear(),
+    reference.getMonth(),
+    getClampedMonthDay(reference.getFullYear(), reference.getMonth(), closingDay),
+  )
+  const closingPassed = reference > closingDate
+  const cycleBaseDate = new Date(
+    reference.getFullYear(),
+    reference.getMonth() + (closingPassed ? 1 : 0),
+    1,
+  )
+  const dueMonthOffset = dueDay <= closingDay ? 1 : 0
+  const dueBaseDate = new Date(
+    cycleBaseDate.getFullYear(),
+    cycleBaseDate.getMonth() + dueMonthOffset,
+    1,
+  )
+  const dueDate = new Date(
+    dueBaseDate.getFullYear(),
+    dueBaseDate.getMonth(),
+    getClampedMonthDay(dueBaseDate.getFullYear(), dueBaseDate.getMonth(), dueDay),
+  )
+
+  return {
+    dueDate,
+    dueDateValue: formatDateToIso(dueDate),
+    closingPassed,
+  }
+}
+
+function getInvoiceDueMonth(value) {
+  if (!value) {
+    return ''
+  }
+
+  if (typeof value === 'string' && /^\d{4}-\d{2}/.test(value)) {
+    return value.slice(0, 7)
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+function getInstallmentEffectiveStatus(installment) {
+  if (installment?.status === 'pago' || installment?.status === 'cancelado') {
+    return installment.status
+  }
+
+  if (!installment?.dataVencimentoParcela) {
+    return installment?.status ?? ''
+  }
+
+  const dueDate = new Date(installment.dataVencimentoParcela)
+
+  if (Number.isNaN(dueDate.getTime())) {
+    return installment?.status ?? ''
+  }
+
+  const today = new Date()
+  const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const dueDateOnly = new Date(dueDate.getFullYear(), dueDate.getMonth(), dueDate.getDate())
+
+  if (dueDateOnly < todayOnly) {
+    return 'atrasado'
+  }
+
+  return installment.status
+}
+
+function formatInvoiceDueMonthOption(value) {
+  if (!value) {
+    return 'Todos os vencimentos'
+  }
+
+  const [year, month] = String(value).split('-')
+
+  if (!year || !month) {
+    return value
+  }
+
+  const date = new Date(Number(year), Number(month) - 1, 1)
+
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    month: 'long',
+    year: 'numeric',
+  }).format(date)
+}
+
+function isCurrentCompetence(reference) {
+  if (!reference) {
+    return false
+  }
+
+  return String(reference).slice(0, 7) === getCurrentCompetenceMonth()
+}
+
 function normalizeExpenseForm(expense) {
   return {
     descricao: expense.descricao ?? '',
@@ -171,10 +421,12 @@ function normalizeExpenseForm(expense) {
     numeroParcelas: expense.numeroParcelas != null ? String(expense.numeroParcelas) : '2',
     naoCompartilhar: Boolean(expense.naoCompartilhar),
     valor: expense.valor != null ? formatCurrencyAmount(expense.valor) : '',
-    competencia: formatDateForInput(expense.competencia),
+    competencia: formatCompetenceForInput(expense.competencia),
     dataVencimento: formatDateForInput(expense.dataVencimento),
+    dataFimRecorrencia: formatDateForInput(expense.dataFimRecorrencia),
     observacao: expense.observacao ?? '',
     categoriaId: expense.categoriaId ?? '',
+    cartaoCreditoId: expense.cartaoCreditoId ?? '',
   }
 }
 
@@ -278,14 +530,25 @@ function App() {
   const [expenses, setExpenses] = useState([])
   const [categories, setCategories] = useState([])
   const [jointAccounts, setJointAccounts] = useState([])
+  const [creditCards, setCreditCards] = useState([])
+  const [creditCardInvoices, setCreditCardInvoices] = useState([])
+  const [invoiceFilters, setInvoiceFilters] = useState({ cartaoCreditoId: 'todos', dueMonth: '', sortOrder: 'desc' })
   const [categoryForm, setCategoryForm] = useState(initialCategoryForm)
   const [jointAccountForm, setJointAccountForm] = useState(initialJointAccountForm)
-  const [expenseForm, setExpenseForm] = useState(initialExpenseForm)
+  const [creditCardForm, setCreditCardForm] = useState(initialCreditCardForm)
+  const [selectedCreditCard, setSelectedCreditCard] = useState(null)
+  const [expenseForm, setExpenseForm] = useState(() => getInitialExpenseForm())
   const [isLoadingExpenses, setIsLoadingExpenses] = useState(false)
   const [isLoadingCategories, setIsLoadingCategories] = useState(false)
   const [isLoadingJointAccounts, setIsLoadingJointAccounts] = useState(false)
+  const [isLoadingCreditCards, setIsLoadingCreditCards] = useState(false)
+  const [isLoadingInvoices, setIsLoadingInvoices] = useState(false)
   const [isSavingJointAccount, setIsSavingJointAccount] = useState(false)
   const [isSavingCategory, setIsSavingCategory] = useState(false)
+  const [isSavingCreditCard, setIsSavingCreditCard] = useState(false)
+  const [isPayingInvoice, setIsPayingInvoice] = useState(false)
+  const [isReopeningInvoice, setIsReopeningInvoice] = useState(false)
+  const [isReopeningExpense, setIsReopeningExpense] = useState(false)
   const [isPayingExpense, setIsPayingExpense] = useState(false)
   const [isPayingInstallment, setIsPayingInstallment] = useState(false)
   const [isDeletingExpense, setIsDeletingExpense] = useState(false)
@@ -293,18 +556,66 @@ function App() {
   const [isLoadingExpenseDetails, setIsLoadingExpenseDetails] = useState(false)
   const [isSavingExpense, setIsSavingExpense] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState(null)
+  const [selectedInvoice, setSelectedInvoice] = useState(null)
+  const [invoiceModalMode, setInvoiceModalMode] = useState(null)
   const [selectedInstallment, setSelectedInstallment] = useState(null)
   const [selectedJointAccount, setSelectedJointAccount] = useState(null)
+  const [creditCardLimitWarning, setCreditCardLimitWarning] = useState(null)
+  const [creditCardDueDateNotice, setCreditCardDueDateNotice] = useState(null)
+  const [pendingExpensePayload, setPendingExpensePayload] = useState(null)
   const [loginErrorMessage, setLoginErrorMessage] = useState('')
   const [jointAccountErrorMessage, setJointAccountErrorMessage] = useState('')
   const [expenseModalMode, setExpenseModalMode] = useState(null)
   const [expenseSuccessMessage, setExpenseSuccessMessage] = useState('')
   const [expenseFilters, setExpenseFilters] = useState(() => getCurrentMonthRange())
+  const [monthlyReportFilters, setMonthlyReportFilters] = useState(() => getDefaultMonthlyReportRange())
+  const [monthlyReportRange, setMonthlyReportRange] = useState(() => getDefaultMonthlyReportRange())
+  const [monthlyReportItems, setMonthlyReportItems] = useState([])
+  const [isLoadingMonthlyReport, setIsLoadingMonthlyReport] = useState(false)
+  const [comparisonReportFilters, setComparisonReportFilters] = useState(() => getDefaultComparisonMonths())
+  const [comparisonReport, setComparisonReport] = useState(null)
+  const [isLoadingComparisonReport, setIsLoadingComparisonReport] = useState(false)
+  const [topCategoryFilters, setTopCategoryFilters] = useState(() => getDefaultMonthlyReportRange())
+  const [topCategoryItems, setTopCategoryItems] = useState([])
+  const [isLoadingTopCategoryReport, setIsLoadingTopCategoryReport] = useState(false)
+  const [expandedTopCategoryNames, setExpandedTopCategoryNames] = useState({})
+  const [whoSpendsMoreFilters, setWhoSpendsMoreFilters] = useState(() => getDefaultMonthlyReportRange())
+  const [whoSpendsMoreReport, setWhoSpendsMoreReport] = useState(null)
+  const [isLoadingWhoSpendsMoreReport, setIsLoadingWhoSpendsMoreReport] = useState(false)
   const [expandedCategoryIds, setExpandedCategoryIds] = useState({})
   const [expandedInstallmentIds, setExpandedInstallmentIds] = useState({})
+  const [expandedInvoiceIds, setExpandedInvoiceIds] = useState({})
   const [route, setRoute] = useState(() => window.location.pathname)
   const [search, setSearch] = useState(() => window.location.search)
   const [dashboardSection, setDashboardSection] = useState('gastos')
+  const [reportSection, setReportSection] = useState('evolucao-mensal')
+  const reportMenuItems = [
+    {
+      id: 'evolucao-mensal',
+      title: 'Evolucao mensal de gastos',
+      description: 'Compare a variacao dos gastos por mes dentro do periodo escolhido.',
+    },
+    {
+      id: 'comparativo-mensal',
+      title: 'Comparativo mensal',
+      description: 'Visualize diferencas de desempenho entre meses consecutivos.',
+    },
+    {
+      id: 'top-categorias',
+      title: 'Top categorias',
+      description: 'Descubra quais categorias mais concentram saidas no periodo.',
+    },
+    {
+      id: 'quem-gasta-mais',
+      title: 'Quem gasta mais',
+      description: 'Compare a participacao de gasto entre os usuarios da conta conjunta.',
+    },
+    {
+      id: 'comportamento',
+      title: 'Comportamento',
+      description: 'Leia padroes de gasto, recorrencia e sazonalidade do usuario.',
+    },
+  ]
   const resetParams = new URLSearchParams(search)
   const recoveryToken = resetParams.get('token') ?? ''
   const isPasswordResetRoute = route === '/redefinir-senha' || route === '/trocar-senha'
@@ -337,6 +648,8 @@ function App() {
       setExpenses([])
       setCategories([])
       setJointAccounts([])
+      setCreditCards([])
+      setCreditCardInvoices([])
       return
     }
 
@@ -386,9 +699,10 @@ function App() {
       setIsLoadingExpenses(true)
 
       try {
-        const [expensesResponse, categoriesResponse] = await Promise.all([
+        const [expensesResponse, categoriesResponse, creditCardsResponse] = await Promise.all([
           getExpenses(token),
           getCategories(token),
+          getCreditCards(token),
         ])
 
         if (!isMounted) {
@@ -397,6 +711,7 @@ function App() {
 
         setExpenses(Array.isArray(expensesResponse.gastos) ? expensesResponse.gastos : [])
         setCategories(Array.isArray(categoriesResponse) ? categoriesResponse : [])
+        setCreditCards(Array.isArray(creditCardsResponse) ? creditCardsResponse : [])
       } catch (error) {
         if (!isMounted) {
           return
@@ -429,7 +744,33 @@ function App() {
     expenseFilters.dateTo,
     expenseFilters.status,
     expenseFilters.tipo,
+    expenseFilters.cartaoCreditoId,
   ])
+
+  useEffect(() => {
+    if (!token || !profile || !isDashboardRoute || dashboardSection !== 'relatorios') {
+      return
+    }
+
+    if (reportSection === 'evolucao-mensal') {
+      loadMonthlyReport(monthlyReportFilters)
+      return
+    }
+
+    if (reportSection === 'comparativo-mensal') {
+      loadComparisonReport(comparisonReportFilters)
+      return
+    }
+
+    if (reportSection === 'top-categorias') {
+      loadTopCategoryReport(topCategoryFilters)
+      return
+    }
+
+    if (reportSection === 'quem-gasta-mais') {
+      loadWhoSpendsMoreReport(whoSpendsMoreFilters)
+    }
+  }, [token, profile, isDashboardRoute, dashboardSection])
 
   useEffect(() => {
     if (!token || !profile || !isDashboardRoute || dashboardSection !== 'categorias') {
@@ -514,6 +855,101 @@ function App() {
   }, [token, profile, isDashboardRoute, dashboardSection])
 
   useEffect(() => {
+    if (!token || !profile || !isDashboardRoute || dashboardSection !== 'cartoes') {
+      return
+    }
+
+    let isMounted = true
+
+    const hydrateCreditCards = async () => {
+      setIsLoadingCreditCards(true)
+
+      try {
+        const [cardsResponse, invoicesResponse] = await Promise.all([
+          getCreditCards(token),
+          getCreditCardInvoices(token).catch(() => []),
+        ])
+
+        if (!isMounted) {
+          return
+        }
+
+        setCreditCards(Array.isArray(cardsResponse) ? cardsResponse : [])
+        if (Array.isArray(invoicesResponse)) {
+          setCreditCardInvoices(invoicesResponse)
+        }
+      } catch (error) {
+        if (!isMounted) {
+          return
+        }
+
+        setStatus({
+          type: 'error',
+          message: error.message || 'Nao foi possivel carregar os cartoes de credito.',
+        })
+      } finally {
+        if (isMounted) {
+          setIsLoadingCreditCards(false)
+        }
+      }
+    }
+
+    hydrateCreditCards()
+
+    return () => {
+      isMounted = false
+    }
+  }, [token, profile, isDashboardRoute, dashboardSection])
+
+  useEffect(() => {
+    if (!token || !profile || !isDashboardRoute || dashboardSection !== 'faturas') {
+      return
+    }
+
+    let isMounted = true
+
+    const hydrateInvoices = async () => {
+      setIsLoadingInvoices(true)
+
+      try {
+        const selectedCardId = invoiceFilters.cartaoCreditoId === 'todos' ? '' : invoiceFilters.cartaoCreditoId
+        const [cardsResponse, invoicesResponse, expensesResponse] = await Promise.all([
+          creditCards.length === 0 ? getCreditCards(token) : Promise.resolve(creditCards),
+          getCreditCardInvoices(token, selectedCardId),
+          getExpenses(token),
+        ])
+
+        if (!isMounted) {
+          return
+        }
+
+        setCreditCards(Array.isArray(cardsResponse) ? cardsResponse : [])
+        setCreditCardInvoices(Array.isArray(invoicesResponse) ? invoicesResponse : [])
+        setExpenses(Array.isArray(expensesResponse?.gastos) ? expensesResponse.gastos : [])
+      } catch (error) {
+        if (!isMounted) {
+          return
+        }
+
+        setStatus({
+          type: 'error',
+          message: error.message || 'Nao foi possivel carregar as faturas dos cartoes.',
+        })
+      } finally {
+        if (isMounted) {
+          setIsLoadingInvoices(false)
+        }
+      }
+    }
+
+    hydrateInvoices()
+
+    return () => {
+      isMounted = false
+    }
+  }, [token, profile, isDashboardRoute, dashboardSection, invoiceFilters.cartaoCreditoId])
+
+  useEffect(() => {
     if (!token || !profile || !isExpenseCreateRoute) {
       return
     }
@@ -524,16 +960,17 @@ function App() {
       setIsLoadingExpenseDetails(true)
 
       try {
-        const [categoriesResponse, jointAccountsResponse] = await Promise.all([
+        const [categoriesResponse, jointAccountsResponse, creditCardsResponse] = await Promise.all([
           categories.length === 0 ? getCategories(token) : Promise.resolve(categories),
           jointAccounts.length === 0 ? getJointAccounts(token) : Promise.resolve(jointAccounts),
+          creditCards.length === 0 ? getCreditCards(token) : Promise.resolve(creditCards),
         ])
 
         if (!isMounted) {
           return
         }
 
-        setExpenseForm(initialExpenseForm)
+        setExpenseForm(getInitialExpenseForm())
 
         if (Array.isArray(categoriesResponse)) {
           setCategories(categoriesResponse)
@@ -541,6 +978,10 @@ function App() {
 
         if (Array.isArray(jointAccountsResponse)) {
           setJointAccounts(jointAccountsResponse)
+        }
+
+        if (Array.isArray(creditCardsResponse)) {
+          setCreditCards(creditCardsResponse)
         }
       } catch (error) {
         if (!isMounted) {
@@ -563,7 +1004,7 @@ function App() {
     return () => {
       isMounted = false
     }
-  }, [token, profile, isExpenseCreateRoute, categories, jointAccounts])
+  }, [token, profile, isExpenseCreateRoute, categories, jointAccounts, creditCards])
 
   useEffect(() => {
     if (!token || !profile || !isExpenseEditRoute || !editingExpenseId) {
@@ -576,13 +1017,24 @@ function App() {
       setIsLoadingExpenseDetails(true)
 
       try {
-        const [expenseResponse, categoriesResponse, jointAccountsResponse] = await Promise.all([
+        const [expenseResponse, categoriesResponse, jointAccountsResponse, creditCardsResponse] = await Promise.all([
           getExpenseById(token, editingExpenseId),
           categories.length === 0 ? getCategories(token) : Promise.resolve(categories),
           jointAccounts.length === 0 ? getJointAccounts(token) : Promise.resolve(jointAccounts),
+          creditCards.length === 0 ? getCreditCards(token) : Promise.resolve(creditCards),
         ])
 
         if (!isMounted) {
+          return
+        }
+
+        if (expenseResponse.responsavelId !== profile.id) {
+          blockSharedExpenseEdition()
+          return
+        }
+
+        if (getEffectiveExpenseStatus(expenseResponse) === 'pago') {
+          blockPaidExpenseEdition()
           return
         }
 
@@ -594,6 +1046,10 @@ function App() {
 
         if (Array.isArray(jointAccountsResponse)) {
           setJointAccounts(jointAccountsResponse)
+        }
+
+        if (Array.isArray(creditCardsResponse)) {
+          setCreditCards(creditCardsResponse)
         }
       } catch (error) {
         if (!isMounted) {
@@ -616,7 +1072,7 @@ function App() {
     return () => {
       isMounted = false
     }
-  }, [token, profile, isExpenseEditRoute, editingExpenseId, categories, jointAccounts])
+  }, [token, profile, isExpenseEditRoute, editingExpenseId, categories, jointAccounts, creditCards])
 
   const handleChange = ({ target }) => {
     const { name, value } = target
@@ -643,6 +1099,38 @@ function App() {
     setJointAccountForm((current) => ({ ...current, [name]: value }))
   }
 
+  const handleCreditCardChange = ({ target }) => {
+    const { name, value } = target
+    setCreditCardForm((current) => ({
+      ...current,
+      [name]: name === 'valorLimite' ? formatCurrencyInput(value) : value,
+    }))
+  }
+
+  const openCreditCardEdit = (card) => {
+    if (card.origemCartao === 'conta_conjunta') {
+      setStatus({
+        type: 'error',
+        message: 'Somente o titular do cartao pode editar este cadastro.',
+      })
+      return
+    }
+
+    setSelectedCreditCard(card)
+    setCreditCardForm({
+      descricao: card.descricao ?? '',
+      diaFechamento: card.diaFechamento != null ? String(card.diaFechamento) : '',
+      diaVencimento: card.diaVencimento != null ? String(card.diaVencimento) : '',
+      valorLimite: card.valorLimite != null ? formatCurrencyAmount(card.valorLimite) : '',
+      observacoes: card.observacoes ?? '',
+    })
+  }
+
+  const cancelCreditCardEdit = () => {
+    setSelectedCreditCard(null)
+    setCreditCardForm(initialCreditCardForm)
+  }
+
   const handleExpenseFormChange = ({ target }) => {
     const { checked, name, type, value } = target
     setExpenseForm((current) => {
@@ -651,6 +1139,40 @@ function App() {
           ...current,
           origemLancamento: value,
           numeroParcelas: value === 'parcelado' ? current.numeroParcelas || '2' : '2',
+          dataFimRecorrencia: value === 'recorrente' ? current.dataFimRecorrencia : '',
+        }
+      }
+
+      if (name === 'cartaoCreditoId') {
+        const selectedCard = creditCards.find((card) => card.id === value)
+
+        if (!selectedCard) {
+          return {
+            ...current,
+            cartaoCreditoId: value,
+          }
+        }
+
+        const invoiceDueDate = calculateCreditCardInvoiceDueDate(selectedCard)
+
+        if (!invoiceDueDate?.dueDateValue) {
+          return {
+            ...current,
+            cartaoCreditoId: value,
+          }
+        }
+
+        if (invoiceDueDate.closingPassed) {
+          setCreditCardDueDateNotice({
+            cardDescription: selectedCard.descricao || 'Cartao de credito',
+            dueDate: invoiceDueDate.dueDate,
+          })
+        }
+
+        return {
+          ...current,
+          cartaoCreditoId: value,
+          dataVencimento: invoiceDueDate.dueDateValue,
         }
       }
 
@@ -667,6 +1189,258 @@ function App() {
       ...current,
       [name]: value,
     }))
+  }
+
+  const handleInvoiceFilterChange = ({ target }) => {
+    const { name, value } = target
+    setInvoiceFilters((current) => ({
+      ...current,
+      [name]: value,
+    }))
+  }
+
+  const handleMonthlyReportFilterChange = ({ target }) => {
+    const { name, value } = target
+    setMonthlyReportFilters((current) => ({
+      ...current,
+      [name]: value,
+    }))
+  }
+
+  const handleComparisonReportFilterChange = ({ target }) => {
+    const { name, value } = target
+    setComparisonReportFilters((current) => ({
+      ...current,
+      [name]: value,
+    }))
+  }
+
+  const handleTopCategoryFilterChange = ({ target }) => {
+    const { name, value } = target
+    setTopCategoryFilters((current) => ({
+      ...current,
+      [name]: value,
+    }))
+  }
+
+  const handleWhoSpendsMoreFilterChange = ({ target }) => {
+    const { name, value } = target
+    setWhoSpendsMoreFilters((current) => ({
+      ...current,
+      [name]: value,
+    }))
+  }
+
+  const toggleTopCategoryDetails = (categoryName) => {
+    setExpandedTopCategoryNames((current) => ({
+      ...current,
+      [categoryName]: !current[categoryName],
+    }))
+  }
+
+  const normalizeMonthlyReportItems = (response) => {
+    if (!Array.isArray(response)) {
+      return []
+    }
+
+    return response.map((item) => ({
+      referencia: item.referencia ?? item.mes ?? '',
+      total: Number(item.total ?? item.total_gasto ?? 0),
+    }))
+  }
+
+  const loadMonthlyReport = async (range, options = {}) => {
+    if (!token) {
+      return
+    }
+
+    const { dateFrom, dateTo } = range
+
+    if (!dateFrom || !dateTo) {
+      setStatus({
+        type: 'error',
+        message: 'Informe a data inicial e a data final para gerar o relatorio.',
+      })
+      return
+    }
+
+    if (dateTo < dateFrom) {
+      setStatus({
+        type: 'error',
+        message: 'A data final deve ser maior ou igual a data inicial.',
+      })
+      return
+    }
+
+    setIsLoadingMonthlyReport(true)
+
+    try {
+      const response = await getMonthlyEvolutionReport(token, dateFrom, dateTo)
+
+      setMonthlyReportItems(normalizeMonthlyReportItems(response))
+      setMonthlyReportRange(range)
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel gerar o relatorio de evolucao mensal.',
+      })
+    } finally {
+      setIsLoadingMonthlyReport(false)
+    }
+  }
+
+  const handleMonthlyReportSubmit = async (event) => {
+    event.preventDefault()
+    await loadMonthlyReport(monthlyReportFilters)
+  }
+
+  const loadComparisonReport = async (filters) => {
+    if (!token) {
+      return
+    }
+
+    const { currentMonth, previousMonth } = filters
+
+    if (!currentMonth || !previousMonth) {
+      setStatus({
+        type: 'error',
+        message: 'Informe o mes atual e o mes anterior para gerar o comparativo.',
+      })
+      return
+    }
+
+    if (currentMonth < previousMonth) {
+      setStatus({
+        type: 'error',
+        message: 'O mes atual deve ser maior ou igual ao mes anterior.',
+      })
+      return
+    }
+
+    setIsLoadingComparisonReport(true)
+
+    try {
+      const response = await getMonthlyComparisonReport(token, currentMonth, previousMonth)
+      setComparisonReport({
+        mesAtual: Number(response?.mesAtual ?? 0),
+        mesAnterior: Number(response?.mesAnterior ?? 0),
+        variacao: response?.variacao ?? '0.0%',
+      })
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel gerar o relatorio comparativo mensal.',
+      })
+    } finally {
+      setIsLoadingComparisonReport(false)
+    }
+  }
+
+  const handleComparisonReportSubmit = async (event) => {
+    event.preventDefault()
+    await loadComparisonReport(comparisonReportFilters)
+  }
+
+  const loadTopCategoryReport = async (range) => {
+    if (!token) {
+      return
+    }
+
+    const { dateFrom, dateTo } = range
+
+    if (!dateFrom || !dateTo) {
+      setStatus({
+        type: 'error',
+        message: 'Informe a data inicial e a data final para gerar o top de categorias.',
+      })
+      return
+    }
+
+    if (dateTo < dateFrom) {
+      setStatus({
+        type: 'error',
+        message: 'A data final deve ser maior ou igual a data inicial.',
+      })
+      return
+    }
+
+    setIsLoadingTopCategoryReport(true)
+
+    try {
+      const [response, expensesResponse, categoriesResponse] = await Promise.all([
+        getTopCategoryReport(token, dateFrom, dateTo),
+        getExpenses(token),
+        categories.length === 0 ? getCategories(token) : Promise.resolve(categories),
+      ])
+
+      setExpenses(Array.isArray(expensesResponse?.gastos) ? expensesResponse.gastos : [])
+      if (Array.isArray(categoriesResponse)) {
+        setCategories(categoriesResponse)
+      }
+
+      setTopCategoryItems(Array.isArray(response)
+        ? response.map((item) => ({
+          categoria: item.categoria ?? 'Sem categoria',
+          total: Number(item.total_gasto ?? item.total ?? 0),
+        }))
+        : [])
+      setExpandedTopCategoryNames({})
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel gerar o relatorio de top categorias.',
+      })
+    } finally {
+      setIsLoadingTopCategoryReport(false)
+    }
+  }
+
+  const handleTopCategoryReportSubmit = async (event) => {
+    event.preventDefault()
+    await loadTopCategoryReport(topCategoryFilters)
+  }
+
+  const loadWhoSpendsMoreReport = async (range) => {
+    if (!token) {
+      return
+    }
+
+    const { dateFrom, dateTo } = range
+
+    if (!dateFrom || !dateTo) {
+      setStatus({
+        type: 'error',
+        message: 'Informe a data inicial e a data final para gerar o ranking entre usuarios.',
+      })
+      return
+    }
+
+    if (dateTo < dateFrom) {
+      setStatus({
+        type: 'error',
+        message: 'A data final deve ser maior ou igual a data inicial.',
+      })
+      return
+    }
+
+    setIsLoadingWhoSpendsMoreReport(true)
+
+    try {
+      const response = await getWhoSpendsMoreReport(token, dateFrom, dateTo)
+      setWhoSpendsMoreReport(response)
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel gerar o ranking entre usuarios.',
+      })
+    } finally {
+      setIsLoadingWhoSpendsMoreReport(false)
+    }
+  }
+
+  const handleWhoSpendsMoreReportSubmit = async (event) => {
+    event.preventDefault()
+    await loadWhoSpendsMoreReport(whoSpendsMoreFilters)
   }
 
   const currentDateLabel = new Intl.DateTimeFormat('pt-BR', {
@@ -686,6 +1460,86 @@ function App() {
     year: 'numeric',
   })
 
+  const buildCreditCardLimitWarning = async (payload) => {
+    if (!payload.cartaoCreditoId || payload.tipo !== 'despesa') {
+      return null
+    }
+
+    const selectedCard = creditCards.find((card) => card.id === payload.cartaoCreditoId)
+
+    if (!selectedCard) {
+      return null
+    }
+
+    const limit = Number(selectedCard.valorLimite ?? 0)
+
+    if (!Number.isFinite(limit) || limit <= 0) {
+      return null
+    }
+
+    const cardInvoices = await getCreditCardInvoices(token, selectedCard.id).catch(() => [])
+    const invoices = Array.isArray(cardInvoices) ? cardInvoices : []
+    const openBalance = invoices
+      .filter((invoice) => !['paga', 'cancelada'].includes(invoice.status))
+      .reduce((total, invoice) => total + Number(invoice.valorTotal ?? 0), 0)
+    const projectedExpenseValue = Number(payload.valor ?? 0)
+    const projectedBalance = openBalance + projectedExpenseValue
+    const currentPercent = (openBalance / limit) * 100
+    const projectedPercent = (projectedBalance / limit) * 100
+    const availableLimit = Math.max(limit - openBalance, 0)
+    const cardOwner = selectedCard.origemCartao === 'conta_conjunta'
+      ? `Cartao de ${selectedCard.usuarioNome || 'usuario compartilhado'}`
+      : 'Meu cartao'
+
+    const baseWarning = {
+      competence: 'Saldo total em aberto',
+      currentTotal: openBalance,
+      projectedTotal: projectedBalance,
+      projectedPercent,
+      limit,
+      availableLimit,
+      installmentLabel: payload.origemLancamento === 'parcelado'
+        ? `compra parcelada em ${payload.numeroParcelas}x`
+        : 'gasto unico',
+    }
+
+    const warnings = []
+
+    if (projectedBalance >= limit) {
+      warnings.push({
+        ...baseWarning,
+        level: 'critical',
+        title: 'Limite atingido ou ultrapassado',
+        description: `O saldo em aberto do cartao sairá de ${currencyFormatter.format(openBalance)} para ${currencyFormatter.format(projectedBalance)}, atingindo ${Math.round(projectedPercent)}% do limite total.`,
+      })
+    } else if (currentPercent < 80 && projectedPercent >= 80) {
+      warnings.push({
+        ...baseWarning,
+        level: 'high',
+        title: 'Aviso de 80% do limite',
+        description: `O saldo em aberto do cartao sairá de ${currencyFormatter.format(openBalance)} para ${currencyFormatter.format(projectedBalance)}, equivalente a ${Math.round(projectedPercent)}% do limite total.`,
+      })
+    } else if (currentPercent < 50 && projectedPercent >= 50) {
+      warnings.push({
+        ...baseWarning,
+        level: 'medium',
+        title: 'Aviso de 50% do limite',
+        description: `O saldo em aberto do cartao sairá de ${currencyFormatter.format(openBalance)} para ${currencyFormatter.format(projectedBalance)}, equivalente a ${Math.round(projectedPercent)}% do limite total.`,
+      })
+    }
+
+    if (warnings.length === 0) {
+      return null
+    }
+
+    return {
+      card: selectedCard,
+      cardOwner,
+      limit,
+      warnings,
+    }
+  }
+
   const filteredExpenses = expenses.filter((expense) => {
     const effectiveStatus = getEffectiveExpenseStatus(expense)
     const matchesStatus =
@@ -693,8 +1547,12 @@ function App() {
       (expenseFilters.status === 'abertos' && ['pendente', 'atrasado'].includes(effectiveStatus)) ||
       effectiveStatus === expenseFilters.status
     const matchesTipo = expenseFilters.tipo === 'todos' || expense.tipo === expenseFilters.tipo
+    const matchesCreditCard =
+      expenseFilters.cartaoCreditoId === 'todos' ||
+      (expenseFilters.cartaoCreditoId === 'sem-cartao' && !expense.cartaoCreditoId) ||
+      expense.cartaoCreditoId === expenseFilters.cartaoCreditoId
 
-    if (!matchesStatus || !matchesTipo) {
+    if (!matchesStatus || !matchesTipo || !matchesCreditCard) {
       return false
     }
 
@@ -714,6 +1572,120 @@ function App() {
       accumulator + getExpensePeriodAmount(expense, expenseFilters.dateFrom, expenseFilters.dateTo)
     ), 0)
   const filteredBalanceValue = filteredRevenueValue - filteredCostValue
+  const availableInvoiceDueMonths = Array.from(new Set(
+    creditCardInvoices
+      .map((invoice) => getInvoiceDueMonth(invoice.dataVencimento))
+      .filter(Boolean),
+  )).sort((firstMonth, secondMonth) => secondMonth.localeCompare(firstMonth))
+  const creditCardUsageById = creditCardInvoices.reduce((usageMap, invoice) => {
+    if (!invoice?.cartaoCreditoId || ['paga', 'cancelada'].includes(invoice.status)) {
+      return usageMap
+    }
+
+    const currentUsage = usageMap.get(invoice.cartaoCreditoId) ?? 0
+    usageMap.set(invoice.cartaoCreditoId, currentUsage + Number(invoice.valorTotal ?? 0))
+    return usageMap
+  }, new Map())
+  const invoiceItemsById = expenses.reduce((groups, expense) => {
+    const ownerLabel = expense.responsavelId === profile?.id
+      ? 'Responsavel: voce'
+      : `Responsavel: ${expense.responsavelNome || 'usuario compartilhado'}`
+
+    if (expense.faturaCartaoId && expense.origemLancamento !== 'parcelado') {
+      const entries = groups.get(expense.faturaCartaoId) ?? []
+      entries.push({
+        id: expense.id,
+        label: expense.descricao || 'Gasto sem descricao',
+        amount: Number(expense.valor ?? 0),
+        status: getEffectiveExpenseStatus(expense),
+        dueDate: expense.dataVencimento,
+        competence: expense.competencia,
+        createdAt: expense.createdAt,
+        origin: expense.origemLancamento,
+        ownerLabel,
+      })
+      groups.set(expense.faturaCartaoId, entries)
+    }
+
+    if (Array.isArray(expense.lancamentosBase) && expense.lancamentosBase.length > 0) {
+      expense.lancamentosBase.forEach((installment) => {
+        if (!installment.faturaCartaoId) {
+          return
+        }
+
+        const entries = groups.get(installment.faturaCartaoId) ?? []
+        entries.push({
+          id: installment.id,
+          label: `${expense.descricao || 'Gasto sem descricao'} - Parcela ${installment.numeroParcela}/${expense.numeroParcelas || expense.lancamentosBase.length}`,
+          amount: Number(installment.valorParcela ?? 0),
+          status: getInstallmentEffectiveStatus(installment),
+          dueDate: installment.dataVencimentoParcela,
+          competence: installment.competencia,
+          createdAt: installment.createdAt,
+          origin: 'parcelado',
+          ownerLabel,
+        })
+        groups.set(installment.faturaCartaoId, entries)
+      })
+    }
+
+    return groups
+  }, new Map())
+  const filteredCreditCardInvoices = creditCardInvoices.filter((invoice) => {
+    if (!invoiceFilters.dueMonth) {
+      return true
+    }
+
+    return getInvoiceDueMonth(invoice.dataVencimento) === invoiceFilters.dueMonth
+  })
+  const sortedCreditCardInvoices = filteredCreditCardInvoices.slice().sort((firstInvoice, secondInvoice) => {
+    const firstTime = firstInvoice.dataVencimento ? new Date(firstInvoice.dataVencimento).getTime() : 0
+    const secondTime = secondInvoice.dataVencimento ? new Date(secondInvoice.dataVencimento).getTime() : 0
+
+    return invoiceFilters.sortOrder === 'asc'
+      ? firstTime - secondTime
+      : secondTime - firstTime
+  })
+  const monthlyReportValues = monthlyReportItems.map((item) => Number(item.total ?? item.total_gasto ?? 0))
+  const monthlyReportMax = monthlyReportValues.length > 0 ? Math.max(...monthlyReportValues) : 0
+  const monthlyReportTotal = monthlyReportValues.reduce((sum, item) => sum + item, 0)
+  const monthlyReportAverage = monthlyReportValues.length > 0 ? monthlyReportTotal / monthlyReportValues.length : 0
+  const firstReportMonth = monthlyReportItems[0]
+  const lastReportMonth = monthlyReportItems[monthlyReportItems.length - 1]
+  const highestMonthlyReportItem = monthlyReportItems.reduce((highest, item) => {
+    if (!highest) {
+      return item
+    }
+
+    const currentValue = Number(item.total ?? item.total_gasto ?? 0)
+    const highestValue = Number(highest.total ?? highest.total_gasto ?? 0)
+
+    return currentValue > highestValue ? item : highest
+  }, null)
+  const monthlyReportVariation = firstReportMonth
+    ? ((Number(lastReportMonth.total ?? lastReportMonth.total_gasto ?? 0)
+      - Number(firstReportMonth.total ?? firstReportMonth.total_gasto ?? 0))
+      / Math.max(Number(firstReportMonth.total ?? firstReportMonth.total_gasto ?? 0), 1)) * 100
+    : 0
+  const monthlyReportPeriodLabel = monthlyReportRange.dateFrom && monthlyReportRange.dateTo
+    ? `${new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric' }).format(new Date(`${monthlyReportRange.dateFrom}T00:00:00`))} - ${new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric' }).format(new Date(`${monthlyReportRange.dateTo}T00:00:00`))}`
+    : 'Periodo nao informado'
+  const getTopCategoryExpenseItems = (categoryName) => (
+    expenses
+      .filter((expense) => {
+        if (expense.tipo !== 'despesa' || expense.responsavelId !== profile?.id) {
+          return false
+        }
+
+        const category = categories.find((item) => item.id === expense.categoriaId)
+        return category?.descricao === categoryName && isDateInRange(expense.competencia, topCategoryFilters.dateFrom, topCategoryFilters.dateTo)
+      })
+      .sort((firstExpense, secondExpense) => {
+        const firstDate = firstExpense.competencia ? new Date(firstExpense.competencia).getTime() : 0
+        const secondDate = secondExpense.competencia ? new Date(secondExpense.competencia).getTime() : 0
+        return secondDate - firstDate
+      })
+  )
   const groupedExpenses = filteredExpenses.reduce((groups, expense) => {
     const category = categories.find((item) => item.id === expense.categoriaId)
     const categoryId = expense.categoriaId || 'sem-categoria'
@@ -744,6 +1716,13 @@ function App() {
     setExpandedInstallmentIds((current) => ({
       ...current,
       [expenseId]: !current[expenseId],
+    }))
+  }
+
+  const toggleInvoiceItems = (invoiceId) => {
+    setExpandedInvoiceIds((current) => ({
+      ...current,
+      [invoiceId]: !current[invoiceId],
     }))
   }
 
@@ -780,6 +1759,24 @@ function App() {
   const navigateToExpenseEdit = (expenseId) => {
     setDashboardSection('gastos')
     navigateTo(`/dashboard/gastos/${expenseId}`)
+  }
+
+  const blockPaidExpenseEdition = () => {
+    setStatus({
+      type: 'error',
+      message: 'Gastos quitados nao podem ser editados.',
+    })
+    setDashboardSection('gastos')
+    navigateTo('/dashboard')
+  }
+
+  const blockSharedExpenseEdition = () => {
+    setStatus({
+      type: 'error',
+      message: 'Somente o responsavel pelo gasto pode editar este registro.',
+    })
+    setDashboardSection('gastos')
+    navigateTo('/dashboard')
   }
 
   const navigateToExpenseCreate = () => {
@@ -1018,6 +2015,62 @@ function App() {
     }
   }
 
+  const handleCreditCardSubmit = async (event) => {
+    event.preventDefault()
+
+    if (!token) {
+      setStatus({
+        type: 'error',
+        message: 'Sua sessao expirou. Entre novamente para criar cartoes de credito.',
+      })
+      navigateTo('/')
+      return
+    }
+
+    setIsSavingCreditCard(true)
+    setStatus({
+      type: 'loading',
+      message: selectedCreditCard
+        ? `Salvando alteracoes do cartao "${creditCardForm.descricao}"...`
+        : `Criando o cartao "${creditCardForm.descricao}"...`,
+    })
+
+    try {
+      const payload = {
+        descricao: creditCardForm.descricao,
+        diaFechamento: Number(creditCardForm.diaFechamento),
+        diaVencimento: Number(creditCardForm.diaVencimento),
+        valorLimite: parseCurrencyInput(creditCardForm.valorLimite),
+        observacoes: creditCardForm.observacoes,
+      }
+      const savedCard = selectedCreditCard
+        ? await updateCreditCard(token, selectedCreditCard.id, payload)
+        : await createCreditCard(token, payload)
+
+      setCreditCards((current) => (
+        selectedCreditCard
+          ? current.map((card) => (card.id === savedCard.id ? { ...card, ...savedCard } : card))
+          : [savedCard, ...current]
+      ))
+      setCreditCardForm(initialCreditCardForm)
+      setSelectedCreditCard(null)
+      setStatus({
+        type: 'success',
+        message: selectedCreditCard
+          ? `Cartao "${savedCard.descricao}" atualizado com sucesso.`
+          : `Cartao "${savedCard.descricao}" criado com sucesso.`,
+      })
+      setDashboardSection('cartoes')
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel salvar o cartao de credito.',
+      })
+    } finally {
+      setIsSavingCreditCard(false)
+    }
+  }
+
   const handleJointAccountSubmit = async (event) => {
     event.preventDefault()
 
@@ -1091,18 +2144,42 @@ function App() {
     setExpenseModalMode('pay')
   }
 
+  const openReopenExpenseModal = (expense) => {
+    setSelectedExpense(expense)
+    setExpenseModalMode('reopen')
+  }
+
+  const openPayInvoiceModal = (invoice) => {
+    setSelectedInvoice(invoice)
+    setInvoiceModalMode('pay')
+  }
+
+  const openReopenInvoiceModal = (invoice) => {
+    setSelectedInvoice(invoice)
+    setInvoiceModalMode('reopen')
+  }
+
   const openDeleteExpenseModal = (expense) => {
     setSelectedExpense(expense)
     setExpenseModalMode('delete')
   }
 
   const closePayExpenseModal = () => {
-    if (isPayingExpense || isDeletingExpense) {
+    if (isPayingExpense || isDeletingExpense || isReopeningExpense) {
       return
     }
 
     setSelectedExpense(null)
     setExpenseModalMode(null)
+  }
+
+  const closePayInvoiceModal = () => {
+    if (isPayingInvoice || isReopeningInvoice) {
+      return
+    }
+
+    setSelectedInvoice(null)
+    setInvoiceModalMode(null)
   }
 
   const openPayInstallmentModal = (expense, installment) => {
@@ -1141,6 +2218,10 @@ function App() {
     setLoginErrorMessage('')
   }
 
+  const closeCreditCardDueDateNotice = () => {
+    setCreditCardDueDateNotice(null)
+  }
+
   const handlePayExpense = async () => {
     if (!token || !selectedExpense) {
       return
@@ -1168,6 +2249,38 @@ function App() {
       })
     } finally {
       setIsPayingExpense(false)
+    }
+  }
+
+  const handleReopenExpense = async () => {
+    if (!token || !selectedExpense) {
+      return
+    }
+
+    setIsReopeningExpense(true)
+    setStatus({
+      type: 'loading',
+      message: `Reabrindo o gasto "${selectedExpense.descricao}"...`,
+    })
+
+    try {
+      const gastoReaberto = await reopenExpense(token, selectedExpense.id)
+      const gastoCompleto = await getExpenseById(token, gastoReaberto.id).catch(() => gastoReaberto)
+
+      setExpenses((current) => current.map((expense) => (expense.id === gastoReaberto.id ? gastoCompleto : expense)))
+      setStatus({
+        type: 'success',
+        message: `Gasto "${selectedExpense.descricao}" reaberto com sucesso.`,
+      })
+      setSelectedExpense(null)
+      setExpenseModalMode(null)
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel reabrir o gasto selecionado.',
+      })
+    } finally {
+      setIsReopeningExpense(false)
     }
   }
 
@@ -1216,6 +2329,84 @@ function App() {
     }
   }
 
+  const handlePayInvoice = async () => {
+    if (!selectedInvoice || !token) {
+      return
+    }
+
+    setIsPayingInvoice(true)
+    setStatus({
+      type: 'loading',
+      message: `Quitando a fatura ${selectedInvoice.competencia}...`,
+    })
+
+    try {
+      await payCreditCardInvoice(token, selectedInvoice.id, {
+        dataPagamento: new Date().toISOString(),
+      })
+
+      const selectedCardId = invoiceFilters.cartaoCreditoId === 'todos' ? '' : invoiceFilters.cartaoCreditoId
+      const [updatedInvoices, updatedExpenses] = await Promise.all([
+        getCreditCardInvoices(token, selectedCardId),
+        getExpenses(token),
+      ])
+
+      setCreditCardInvoices(Array.isArray(updatedInvoices) ? updatedInvoices : [])
+      setExpenses(Array.isArray(updatedExpenses?.gastos) ? updatedExpenses.gastos : [])
+      setSelectedInvoice(null)
+      setInvoiceModalMode(null)
+      setStatus({
+        type: 'success',
+        message: `Fatura ${selectedInvoice.competencia} quitada com sucesso.`,
+      })
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel quitar a fatura selecionada.',
+      })
+    } finally {
+      setIsPayingInvoice(false)
+    }
+  }
+
+  const handleReopenInvoice = async () => {
+    if (!selectedInvoice || !token) {
+      return
+    }
+
+    setIsReopeningInvoice(true)
+    setStatus({
+      type: 'loading',
+      message: `Reabrindo a fatura ${selectedInvoice.competencia}...`,
+    })
+
+    try {
+      await reopenCreditCardInvoice(token, selectedInvoice.id)
+
+      const selectedCardId = invoiceFilters.cartaoCreditoId === 'todos' ? '' : invoiceFilters.cartaoCreditoId
+      const [updatedInvoices, updatedExpenses] = await Promise.all([
+        getCreditCardInvoices(token, selectedCardId),
+        getExpenses(token),
+      ])
+
+      setCreditCardInvoices(Array.isArray(updatedInvoices) ? updatedInvoices : [])
+      setExpenses(Array.isArray(updatedExpenses?.gastos) ? updatedExpenses.gastos : [])
+      setSelectedInvoice(null)
+      setInvoiceModalMode(null)
+      setStatus({
+        type: 'success',
+        message: `Fatura ${selectedInvoice.competencia} reaberta com sucesso.`,
+      })
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel reabrir a fatura selecionada.',
+      })
+    } finally {
+      setIsReopeningInvoice(false)
+    }
+  }
+
   const handleUnlinkJointAccount = async () => {
     if (!selectedJointAccount || !token) {
       return
@@ -1257,6 +2448,16 @@ function App() {
       return
     }
 
+    if (getEffectiveExpenseStatus(selectedExpense) === 'pago') {
+      setStatus({
+        type: 'error',
+        message: 'Nao e possivel excluir um gasto que ja foi pago.',
+      })
+      setSelectedExpense(null)
+      setExpenseModalMode(null)
+      return
+    }
+
     setIsDeletingExpense(true)
     setStatus({
       type: 'loading',
@@ -1295,10 +2496,14 @@ function App() {
       status: expenseForm.status,
       naoCompartilhar: jointAccounts.length > 0 ? expenseForm.naoCompartilhar : false,
       valor: parseCurrencyInput(expenseForm.valor),
-      competencia: expenseForm.competencia || null,
+      competencia: normalizeCompetenceForPayload(expenseForm.competencia),
       dataVencimento: expenseForm.dataVencimento || null,
+      dataFimRecorrencia: expenseForm.origemLancamento === 'recorrente'
+        ? (expenseForm.dataFimRecorrencia || null)
+        : null,
       observacao: expenseForm.observacao || null,
       ...(expenseForm.categoriaId ? { categoriaId: expenseForm.categoriaId } : {}),
+      cartaoCreditoId: expenseForm.cartaoCreditoId || null,
     }
 
     setIsSavingExpense(true)
@@ -1323,6 +2528,39 @@ function App() {
       })
     } finally {
       setIsSavingExpense(false)
+    }
+  }
+
+  const persistExpenseCreate = async (payload) => {
+    setIsSavingExpense(true)
+    setStatus({
+      type: 'loading',
+      message: `Criando o gasto "${payload.descricao}"...`,
+    })
+
+    try {
+      const createdExpense = await createExpense(token, payload)
+      const updatedInvoices = payload.cartaoCreditoId ? await getCreditCardInvoices(token).catch(() => null) : null
+      setExpenses((current) => [createdExpense, ...current])
+      if (Array.isArray(updatedInvoices)) {
+        setCreditCardInvoices(updatedInvoices)
+      }
+      setExpenseForm(getInitialExpenseForm())
+      setExpenseSuccessMessage(`Novo gasto "${createdExpense.descricao}" criado com sucesso.`)
+      setStatus({
+        type: 'success',
+        message: `Gasto "${createdExpense.descricao}" criado com sucesso.`,
+      })
+      navigateTo('/dashboard')
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel criar o novo gasto.',
+      })
+    } finally {
+      setIsSavingExpense(false)
+      setCreditCardLimitWarning(null)
+      setPendingExpensePayload(null)
     }
   }
 
@@ -1353,36 +2591,43 @@ function App() {
       numeroParcelas: expenseForm.origemLancamento === 'parcelado' ? Number(expenseForm.numeroParcelas) : 1,
       naoCompartilhar: jointAccounts.length > 0 ? expenseForm.naoCompartilhar : false,
       valor: parseCurrencyInput(expenseForm.valor),
-      competencia: expenseForm.competencia || null,
+      competencia: normalizeCompetenceForPayload(expenseForm.competencia),
       dataVencimento: expenseForm.dataVencimento || null,
+      dataFimRecorrencia: expenseForm.origemLancamento === 'recorrente'
+        ? (expenseForm.dataFimRecorrencia || null)
+        : null,
       observacao: expenseForm.observacao || null,
       categoriaId: expenseForm.categoriaId,
+      cartaoCreditoId: expenseForm.cartaoCreditoId || null,
     }
 
-    setIsSavingExpense(true)
+    const limitWarning = await buildCreditCardLimitWarning(payload)
+
+    if (limitWarning) {
+      setCreditCardLimitWarning(limitWarning)
+      setPendingExpensePayload(payload)
+      return
+    }
+
+    await persistExpenseCreate(payload)
+  }
+
+  const handleContinueAfterLimitWarning = async () => {
+    if (!pendingExpensePayload) {
+      setCreditCardLimitWarning(null)
+      return
+    }
+
+    await persistExpenseCreate(pendingExpensePayload)
+  }
+
+  const handleCancelLimitWarning = () => {
+    setCreditCardLimitWarning(null)
+    setPendingExpensePayload(null)
     setStatus({
-      type: 'loading',
-      message: `Criando o gasto "${expenseForm.descricao}"...`,
+      type: 'error',
+      message: 'Cadastro do gasto cancelado apos alerta de limite do cartao.',
     })
-
-    try {
-      const createdExpense = await createExpense(token, payload)
-      setExpenses((current) => [createdExpense, ...current])
-      setExpenseForm(initialExpenseForm)
-      setExpenseSuccessMessage(`Novo gasto "${createdExpense.descricao}" criado com sucesso.`)
-      setStatus({
-        type: 'success',
-        message: `Gasto "${createdExpense.descricao}" criado com sucesso.`,
-      })
-      navigateTo('/dashboard')
-    } catch (error) {
-      setStatus({
-        type: 'error',
-        message: error.message || 'Nao foi possivel criar o novo gasto.',
-      })
-    } finally {
-      setIsSavingExpense(false)
-    }
   }
 
   const handleResetRequest = async (event) => {
@@ -1445,12 +2690,18 @@ function App() {
       {!isDashboardRoute ? (
         <section className="brand-panel">
           <div className="brand-copy">
-          <span className="eyebrow">Nosso Saldo</span>
-          <h1>Seu financeiro compartilhado com clareza, calma e controle.</h1>
-          <p className="lead">
-            Organize receitas e despesas em um so lugar, acompanhe compromissos do periodo e tenha mais transparencia na gestao financeira compartilhada.
-          </p>
-        </div>
+            <div className="brand-logo-lockup">
+              <img src={nossoSaldoLogo} alt="NossoSaldo" className="brand-logo-image" />
+              <div className="brand-name-block">
+                <strong>NossoSaldo</strong>
+                <span>Financas compartilhadas</span>
+              </div>
+            </div>
+            <h1>Seu financeiro compartilhado com clareza, calma e controle.</h1>
+            <p className="lead">
+              Organize receitas e despesas em um so lugar, acompanhe compromissos do periodo e tenha mais transparencia na gestao financeira compartilhada.
+            </p>
+          </div>
 
           <div className="feature-grid">
           <article className="feature-card feature-card-highlight">
@@ -1642,8 +2893,10 @@ function App() {
               <div className="dashboard-shell">
                 <aside className="dashboard-sidebar">
                   <div className="dashboard-sidebar-brand">
-                    <span className="eyebrow">Workspace</span>
-                    <strong>Nosso Saldo</strong>
+                    <div className="dashboard-logo-lockup">
+                      <img src={nossoSaldoLogo} alt="NossoSaldo" className="dashboard-logo-image" />
+                      <strong>NossoSaldo</strong>
+                    </div>
                     <p>{profile.email}</p>
                   </div>
 
@@ -1656,7 +2909,8 @@ function App() {
                         navigateTo('/dashboard')
                       }}
                     >
-                      Lista de gastos
+                      <span className="dashboard-nav-icon">⌂</span>
+                      <span>Lista de gastos</span>
                     </button>
                     <button
                       type="button"
@@ -1666,8 +2920,46 @@ function App() {
                         navigateTo('/dashboard')
                       }}
                     >
-                      Categorias
+                      <span className="dashboard-nav-icon">◆</span>
+                      <span>Categorias</span>
                     </button>
+                    <button
+                      type="button"
+                      className={`dashboard-nav-item ${dashboardSection === 'cartoes' || dashboardSection === 'faturas' ? 'dashboard-nav-item-active' : ''}`}
+                      onClick={() => {
+                        setDashboardSection('cartoes')
+                        navigateTo('/dashboard')
+                      }}
+                    >
+                      <span className="dashboard-nav-icon">▰</span>
+                      <span>Cartoes de credito</span>
+                    </button>
+                    {dashboardSection === 'cartoes' || dashboardSection === 'faturas' ? (
+                      <div className="dashboard-subnav dashboard-subnav-compact">
+                        <button
+                          type="button"
+                          className={`dashboard-subnav-item ${dashboardSection === 'cartoes' ? 'dashboard-subnav-item-active' : ''}`}
+                          onClick={() => {
+                            setDashboardSection('cartoes')
+                            navigateTo('/dashboard')
+                          }}
+                        >
+                          <span className="dashboard-subnav-dot" />
+                          <span className="dashboard-subnav-item-title">Meus cartoes</span>
+                        </button>
+                        <button
+                          type="button"
+                          className={`dashboard-subnav-item ${dashboardSection === 'faturas' ? 'dashboard-subnav-item-active' : ''}`}
+                          onClick={() => {
+                            setDashboardSection('faturas')
+                            navigateTo('/dashboard')
+                          }}
+                        >
+                          <span className="dashboard-subnav-dot" />
+                          <span className="dashboard-subnav-item-title">Faturas</span>
+                        </button>
+                      </div>
+                    ) : null}
                     <button
                       type="button"
                       className={`dashboard-nav-item ${dashboardSection === 'conta-conjunta' ? 'dashboard-nav-item-active' : ''}`}
@@ -1676,11 +2968,52 @@ function App() {
                         navigateTo('/dashboard')
                       }}
                     >
-                      Conta Conjunta
+                      <span className="dashboard-nav-icon">●</span>
+                      <span>Conta Conjunta</span>
                     </button>
-                    <button type="button" className="dashboard-nav-item dashboard-nav-item-muted">
-                      Relatorios
+                    <button
+                      type="button"
+                      className={`dashboard-nav-item ${dashboardSection === 'relatorios' ? 'dashboard-nav-item-active' : ''}`}
+                      onClick={() => {
+                        setDashboardSection('relatorios')
+                        setReportSection('evolucao-mensal')
+                        navigateTo('/dashboard')
+                      }}
+                    >
+                      <span className="dashboard-nav-icon">☰</span>
+                      <span>Relatorios</span>
                     </button>
+                    {dashboardSection === 'relatorios' ? (
+                      <div className="dashboard-subnav">
+                        <div className="dashboard-subnav-header">
+                          <span className="dashboard-subnav-kicker">Modulo aberto</span>
+                          <strong>Analises financeiras</strong>
+                          <span className="dashboard-subnav-chevron" aria-hidden="true">
+                            ▾
+                          </span>
+                        </div>
+                        {reportMenuItems.map((reportItem) => (
+                          <button
+                            key={reportItem.id}
+                            type="button"
+                            className={`dashboard-subnav-item ${reportSection === reportItem.id ? 'dashboard-subnav-item-active' : ''}`}
+                            onClick={() => {
+                              setDashboardSection('relatorios')
+                              setReportSection(reportItem.id)
+                              navigateTo('/dashboard')
+                            }}
+                          >
+                            <span className="dashboard-subnav-dot" />
+                            <span className="dashboard-subnav-item-copy">
+                              <span className="dashboard-subnav-item-title">{reportItem.title}</span>
+                              <small className="dashboard-subnav-item-description">
+                                {reportItem.description}
+                              </small>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                   </nav>
 
                   <div className="dashboard-sidebar-actions">
@@ -1825,6 +3158,19 @@ function App() {
                               </label>
                             ) : null}
 
+                            {expenseForm.origemLancamento === 'recorrente' ? (
+                              <label className="field">
+                                <span>Data final da recorrencia</span>
+                                <input
+                                  type="date"
+                                  name="dataFimRecorrencia"
+                                  value={expenseForm.dataFimRecorrencia}
+                                  onChange={handleExpenseFormChange}
+                                />
+                                <small>Se informada, vamos criar automaticamente um registro por mes ate essa data.</small>
+                              </label>
+                            ) : null}
+
                             <label className="field">
                               <span>Categoria</span>
                               <select
@@ -1843,8 +3189,36 @@ function App() {
                             </label>
 
                             <label className="field">
+                              <span>Cartao de credito</span>
+                              <select
+                                name="cartaoCreditoId"
+                                value={expenseForm.cartaoCreditoId}
+                                onChange={handleExpenseFormChange}
+                              >
+                                <option value="">Sem cartao vinculado</option>
+                                {creditCards.map((card) => {
+                                  const isSharedCard = card.origemCartao === 'conta_conjunta'
+                                  const ownerLabel = isSharedCard
+                                    ? `Conta conjunta - ${card.usuarioNome || 'usuario compartilhado'}`
+                                    : 'Meu cartao'
+
+                                  return (
+                                    <option key={card.id} value={card.id}>
+                                      {`${card.descricao} | ${ownerLabel}`}
+                                    </option>
+                                  )
+                                })}
+                              </select>
+                              <small>
+                                {creditCards.length > 0
+                                  ? 'Voce pode vincular cartoes seus ou da conta conjunta ativa.'
+                                  : 'Nenhum cartao cadastrado para voce ou para a conta conjunta ativa.'}
+                              </small>
+                            </label>
+
+                            <label className="field">
                               <span>Competencia</span>
-                              <input type="date" name="competencia" value={expenseForm.competencia} onChange={handleExpenseFormChange} />
+                              <input type="month" name="competencia" value={expenseForm.competencia} onChange={handleExpenseFormChange} />
                             </label>
 
                             <label className="field">
@@ -1854,7 +3228,7 @@ function App() {
                                 name="dataVencimento"
                                 value={expenseForm.dataVencimento}
                                 onChange={handleExpenseFormChange}
-                                required={isExpenseCreateRoute && expenseForm.origemLancamento === 'parcelado'}
+                                required={isExpenseCreateRoute && ['parcelado', 'recorrente'].includes(expenseForm.origemLancamento)}
                               />
                             </label>
                           </div>
@@ -1942,6 +3316,30 @@ function App() {
                             <option value="receita">Receita</option>
                           </select>
                         </label>
+
+                        <label className="field">
+                          <span>Cartao de credito</span>
+                          <select
+                            name="cartaoCreditoId"
+                            value={expenseFilters.cartaoCreditoId}
+                            onChange={handleExpenseFilterChange}
+                          >
+                            <option value="todos">Todos os cartoes</option>
+                            <option value="sem-cartao">Sem cartao vinculado</option>
+                            {creditCards.map((card) => {
+                              const isSharedCard = card.origemCartao === 'conta_conjunta'
+                              const ownerLabel = isSharedCard
+                                ? `Conta conjunta - ${card.usuarioNome || 'usuario compartilhado'}`
+                                : 'Meu cartao'
+
+                              return (
+                                <option key={card.id} value={card.id}>
+                                  {`${card.descricao} | ${ownerLabel}`}
+                                </option>
+                              )
+                            })}
+                          </select>
+                        </label>
                       </div>
 
                       {expenseSuccessMessage ? (
@@ -1996,20 +3394,40 @@ function App() {
                                         : []
                                       const hasInstallments = expense.origemLancamento === 'parcelado' && installments.length > 0
                                       const canManageExpense = expense.responsavelId === profile.id
+                                      const isCreditCardExpense = Boolean(expense.cartaoCreditoId)
                                       const expenseOwnerLabel = canManageExpense
                                         ? 'Responsavel: voce'
                                         : `Responsavel: ${expense.responsavelNome || 'usuario compartilhado'}`
-                                      const canPayExpense = canManageExpense && effectiveStatus !== 'pago' && areAllInstallmentsPaid(expense)
+                                      const canEditExpense = canManageExpense && effectiveStatus !== 'pago'
+                                      const canDeleteExpense = canManageExpense && effectiveStatus !== 'pago'
+                                      const canPayExpense = canManageExpense
+                                        && !isCreditCardExpense
+                                        && effectiveStatus !== 'pago'
+                                        && areAllInstallmentsPaid(expense)
+                                      const canReopenExpense = canManageExpense
+                                        && !isCreditCardExpense
+                                        && effectiveStatus === 'pago'
                                       const isInstallmentsExpanded = Boolean(expandedInstallmentIds[expense.id])
 
                                       return (
                                         <article key={expense.id} className="expense-card">
                                           <div
-                                            className="expense-card-clickable"
-                                            onClick={() => navigateToExpenseEdit(expense.id)}
+                                            className={`expense-card-clickable${canEditExpense ? '' : ' expense-card-clickable-disabled'}`}
+                                            onClick={
+                                              canEditExpense
+                                                ? () => navigateToExpenseEdit(expense.id)
+                                                : undefined
+                                            }
+                                            title={
+                                              canEditExpense
+                                                ? 'Editar gasto'
+                                                : effectiveStatus === 'pago'
+                                                  ? 'Gastos quitados nao podem ser editados.'
+                                                  : 'Somente o responsavel pelo gasto pode editar este registro.'
+                                            }
                                           >
                                             <div className="expense-card-main">
-                                              <div>
+                                              <div className="expense-card-primary">
                                                 <div className="expense-card-badges">
                                                   <span className={`expense-badge expense-badge-${expense.tipo}`}>{expense.tipo}</span>
                                                   {effectiveStatus === 'pago' ? (
@@ -2019,12 +3437,17 @@ function App() {
                                                   ) : null}
                                                 </div>
                                                 <h5>{expense.descricao}</h5>
-                                                <p>
-                                                  Status: {effectiveStatus} {expense.competencia ? ` - Competencia ${dateFormatter.format(new Date(expense.competencia))}` : ''}
+                                                <p className="expense-card-subtitle">
+                                                  {expense.competencia
+                                                    ? `Competencia ${formatCompetenceDisplay(expense.competencia)}`
+                                                    : 'Sem competencia informada'}
                                                 </p>
                                               </div>
                                               <div className="expense-card-side">
-                                                <strong>{currencyFormatter.format(Number(expense.valor ?? 0))}</strong>
+                                                <div className="expense-card-amount-block">
+                                                  <strong>{currencyFormatter.format(Number(expense.valor ?? 0))}</strong>
+                                                  <span className="expense-card-status-text">Status: {effectiveStatus}</span>
+                                                </div>
                                                 <div className="expense-card-actions">
                                                   {canPayExpense ? (
                                                     <button
@@ -2038,7 +3461,19 @@ function App() {
                                                       Quitar
                                                     </button>
                                                   ) : null}
-                                                  {canManageExpense ? (
+                                                  {canReopenExpense ? (
+                                                    <button
+                                                      type="button"
+                                                      className="pay-expense-button"
+                                                      onClick={(event) => {
+                                                        event.stopPropagation()
+                                                        openReopenExpenseModal(expense)
+                                                      }}
+                                                    >
+                                                      Reabrir
+                                                    </button>
+                                                  ) : null}
+                                                  {canDeleteExpense ? (
                                                     <button
                                                       type="button"
                                                       className="delete-expense-button"
@@ -2069,21 +3504,40 @@ function App() {
                                             </div>
                                             <div className="expense-card-meta">
                                               <span>
-                                                Origem: {expense.origemLancamento}
+                                                Origem {expense.origemLancamento}
                                                 {expense.origemLancamento === 'parcelado' && expense.numeroParcelas
                                                   ? ` - ${expense.numeroParcelas} parcelas`
                                                   : ''}
                                               </span>
+                                              {expense.cartaoCreditoId ? (
+                                                <span>
+                                                  Cartao: {expense.cartaoCreditoDescricao || 'Cartao vinculado'}
+                                                  {expense.cartaoCreditoUsuarioNome
+                                                    ? ` (${expense.cartaoCreditoUsuarioNome})`
+                                                    : ''}
+                                                </span>
+                                              ) : null}
+                                              {isCreditCardExpense ? (
+                                                <span>Quitacao disponivel somente pela tela de faturas</span>
+                                              ) : null}
                                               <span>{expenseOwnerLabel}</span>
+                                              {!canManageExpense ? (
+                                                <span>Edicao bloqueada para gastos do usuario compartilhado</span>
+                                              ) : null}
                                               <span>
                                                 {expense.dataVencimento
-                                                  ? `Vencimento: ${dateFormatter.format(new Date(expense.dataVencimento))}`
+                                                  ? `Vencimento ${dateFormatter.format(new Date(expense.dataVencimento))}`
                                                   : 'Sem vencimento informado'}
                                               </span>
                                               <span>
                                                 {expense.dataPagamento
-                                                  ? `Pagamento: ${dateFormatter.format(new Date(expense.dataPagamento))}`
+                                                  ? `Pagamento ${dateFormatter.format(new Date(expense.dataPagamento))}`
                                                   : 'Pagamento pendente'}
+                                              </span>
+                                              <span>
+                                                {expense.createdAt
+                                                  ? `Criado em ${dateFormatter.format(new Date(expense.createdAt))}`
+                                                  : 'Data de criacao indisponivel'}
                                               </span>
                                             </div>
                                           </div>
@@ -2094,8 +3548,13 @@ function App() {
                                                   key={installment.id}
                                                   type="button"
                                                   className={`installment-row ${installment.status === 'pago' ? 'installment-row-paid' : ''}`}
-                                                  onClick={() => openPayInstallmentModal(expense, installment)}
-                                                  disabled={installment.status === 'pago' || !canManageExpense}
+                                                  onClick={() => {
+                                                    if (isCreditCardExpense) {
+                                                      return
+                                                    }
+                                                    openPayInstallmentModal(expense, installment)
+                                                  }}
+                                                  disabled={installment.status === 'pago' || !canManageExpense || isCreditCardExpense}
                                                 >
                                                   <span className="installment-number">
                                                     Parcela {installment.numeroParcela}/{expense.numeroParcelas}
@@ -2108,7 +3567,7 @@ function App() {
                                                   </span>
                                                   <span>
                                                     {installment.competencia
-                                                      ? `Competencia ${dateFormatter.format(new Date(installment.competencia))}`
+                                                      ? `Competencia ${formatCompetenceDisplay(installment.competencia)}`
                                                       : 'Sem competencia'}
                                                   </span>
                                                   <span className={`installment-status ${installment.status === 'pago' ? 'installment-status-paid' : ''}`}>
@@ -2128,6 +3587,585 @@ function App() {
                           })}
                         </div>
                       )}
+                    </section>
+                  ) : null}
+
+                  {dashboardSection === 'relatorios' && reportSection === 'evolucao-mensal' ? (
+                    <section className="dashboard-expenses report-section">
+                      <div className="dashboard-section-header">
+                        <div>
+                          <span className="feature-label">Relatorios / Evolucao mensal</span>
+                          <h4>Evolucao mensal de gastos</h4>
+                        </div>
+                        <span className="report-period-pill">{monthlyReportPeriodLabel}</span>
+                      </div>
+
+                      <div className="report-tabs" role="tablist" aria-label="Tipos de relatorio">
+                        {reportMenuItems.map((reportItem) => (
+                          <button
+                            key={reportItem.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={reportSection === reportItem.id}
+                            className={`report-tab ${reportSection === reportItem.id ? 'report-tab-active' : ''}`}
+                            onClick={() => {
+                              setDashboardSection('relatorios')
+                              setReportSection(reportItem.id)
+                              navigateTo('/dashboard')
+                            }}
+                          >
+                            <span className="report-tab-title">{reportItem.title}</span>
+                            <small className="report-tab-description">{reportItem.description}</small>
+                          </button>
+                        ))}
+                      </div>
+
+                      <form className="report-filter-form" onSubmit={handleMonthlyReportSubmit}>
+                        <label className="field">
+                          <span>Data inicial</span>
+                          <input
+                            type="date"
+                            name="dateFrom"
+                            value={monthlyReportFilters.dateFrom}
+                            onChange={handleMonthlyReportFilterChange}
+                            required
+                          />
+                        </label>
+
+                        <label className="field">
+                          <span>Data final</span>
+                          <input
+                            type="date"
+                            name="dateTo"
+                            value={monthlyReportFilters.dateTo}
+                            onChange={handleMonthlyReportFilterChange}
+                            required
+                          />
+                        </label>
+
+                        <button type="submit" className="primary-button" disabled={isLoadingMonthlyReport}>
+                          {isLoadingMonthlyReport ? 'Gerando...' : 'Gerar relatorio'}
+                        </button>
+                      </form>
+
+                      <div className="report-intro-card">
+                        <div>
+                          <strong>Como seus gastos variam ao longo do tempo</strong>
+                          <p>
+                            Este relatorio ajuda a identificar aumento de custo de vida, meses fora da curva
+                            e cria uma base simples para previsoes futuras.
+                          </p>
+                        </div>
+                        <span className="report-insight-badge">
+                          {monthlyReportVariation >= 0 ? '+' : ''}
+                          {monthlyReportVariation.toFixed(1).replace('.', ',')}%
+                          <small>variacao do primeiro para o ultimo mes</small>
+                        </span>
+                      </div>
+
+                      {isLoadingMonthlyReport ? (
+                        <div className="dashboard-empty-state">
+                          <strong>Gerando relatorio...</strong>
+                          <p>Aguarde enquanto consolidamos a evolucao mensal do periodo informado.</p>
+                        </div>
+                      ) : monthlyReportItems.length === 0 ? (
+                        <div className="dashboard-empty-state">
+                          <strong>Nenhum dado encontrado para o periodo.</strong>
+                          <p>Escolha outro intervalo para visualizar a evolucao mensal do usuario logado.</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="report-metrics-grid">
+                            <article className="metric-card metric-card-expense">
+                              <span className="metric-label">Total no periodo</span>
+                              <strong>{currencyFormatter.format(monthlyReportTotal)}</strong>
+                              <p>Soma consolidada dos meses retornados pela API.</p>
+                            </article>
+                            <article className="metric-card metric-card-balance">
+                              <span className="metric-label">Media mensal</span>
+                              <strong>{currencyFormatter.format(monthlyReportAverage)}</strong>
+                              <p>Valor medio do periodo informado para apoiar sua leitura de tendencia.</p>
+                            </article>
+                            <article className="metric-card metric-card-strong">
+                              <span className="metric-label">Maior mes</span>
+                              <strong>{currencyFormatter.format(monthlyReportMax)}</strong>
+                              <p>
+                                {highestMonthlyReportItem
+                                  ? `Pico registrado em ${formatMonthlyReference(highestMonthlyReportItem.referencia)}.`
+                                  : 'Sem destaque no periodo.'}
+                              </p>
+                            </article>
+                          </div>
+
+                          <div className="monthly-report-card">
+                            <div
+                              className="monthly-report-grid"
+                              style={{ gridTemplateColumns: `repeat(${monthlyReportItems.length}, minmax(0, 1fr))` }}
+                            >
+                              {monthlyReportItems.map((item) => {
+                                const totalValue = Number(item.total ?? item.total_gasto ?? 0)
+                                const barHeight = monthlyReportMax > 0
+                                  ? Math.max(18, Math.round((totalValue / monthlyReportMax) * 100))
+                                  : 18
+
+                                return (
+                                  <article key={item.referencia} className="monthly-report-bar-item">
+                                    <div className="monthly-report-value">
+                                      {currencyFormatter.format(totalValue)}
+                                    </div>
+                                    <div className="monthly-report-bar-track">
+                                      <span
+                                        className="monthly-report-bar"
+                                        style={{ height: `${barHeight}%` }}
+                                        aria-label={`${item.referencia}: ${currencyFormatter.format(totalValue)}`}
+                                      />
+                                    </div>
+                                    <strong>{formatMonthlyReference(item.referencia)}</strong>
+                                    <span>{item.referencia}</span>
+                                  </article>
+                                )
+                              })}
+                            </div>
+                          </div>
+
+                          <div className="report-notes-grid">
+                            <article>
+                              <span className="feature-label">Leitura</span>
+                              <strong>Compare os meses com maior concentracao de gastos</strong>
+                              <p>
+                                Use a barra mensal para identificar meses fora da curva e cruzar depois com categorias
+                                e gastos recorrentes.
+                              </p>
+                            </article>
+                            <article>
+                              <span className="feature-label">Valor</span>
+                              <strong>Periodo definido pelo usuario</strong>
+                              <p>
+                                O relatorio considera somente o intervalo informado acima, sempre com base no usuario
+                                logado.
+                              </p>
+                            </article>
+                          </div>
+                        </>
+                      )}
+                    </section>
+                  ) : null}
+
+                  {dashboardSection === 'relatorios' && reportSection === 'comparativo-mensal' ? (
+                    <section className="dashboard-expenses report-section">
+                      <div className="dashboard-section-header">
+                        <div>
+                          <span className="feature-label">Relatorios / Comparativo mensal</span>
+                          <h4>Comparativo entre mes atual e mes anterior</h4>
+                        </div>
+                      </div>
+
+                      <div className="report-tabs" role="tablist" aria-label="Tipos de relatorio">
+                        {reportMenuItems.map((reportItem) => (
+                          <button
+                            key={reportItem.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={reportSection === reportItem.id}
+                            className={`report-tab ${reportSection === reportItem.id ? 'report-tab-active' : ''}`}
+                            onClick={() => {
+                              setDashboardSection('relatorios')
+                              setReportSection(reportItem.id)
+                              navigateTo('/dashboard')
+                            }}
+                          >
+                            <span className="report-tab-title">{reportItem.title}</span>
+                            <small className="report-tab-description">{reportItem.description}</small>
+                          </button>
+                        ))}
+                      </div>
+
+                      <form className="report-filter-form report-filter-form-comparison" onSubmit={handleComparisonReportSubmit}>
+                        <label className="field">
+                          <span>Mes atual</span>
+                          <input
+                            type="month"
+                            name="currentMonth"
+                            value={comparisonReportFilters.currentMonth}
+                            onChange={handleComparisonReportFilterChange}
+                            required
+                          />
+                        </label>
+
+                        <label className="field">
+                          <span>Mes anterior</span>
+                          <input
+                            type="month"
+                            name="previousMonth"
+                            value={comparisonReportFilters.previousMonth}
+                            onChange={handleComparisonReportFilterChange}
+                            required
+                          />
+                        </label>
+
+                        <button type="submit" className="primary-button" disabled={isLoadingComparisonReport}>
+                          {isLoadingComparisonReport ? 'Gerando...' : 'Comparar meses'}
+                        </button>
+                      </form>
+
+                      {isLoadingComparisonReport ? (
+                        <div className="dashboard-empty-state">
+                          <strong>Gerando comparativo...</strong>
+                          <p>Aguarde enquanto consolidamos os totais dos dois meses selecionados.</p>
+                        </div>
+                      ) : comparisonReport ? (
+                        <>
+                          <div className="report-metrics-grid comparison-metrics-grid">
+                            <article className="metric-card metric-card-expense">
+                              <span className="metric-label">Mes atual</span>
+                              <strong>{currencyFormatter.format(comparisonReport.mesAtual)}</strong>
+                              <p>Total de despesas do mes atual selecionado.</p>
+                            </article>
+                            <article className="metric-card metric-card-balance">
+                              <span className="metric-label">Mes anterior</span>
+                              <strong>{currencyFormatter.format(comparisonReport.mesAnterior)}</strong>
+                              <p>Total de despesas do mes anterior selecionado.</p>
+                            </article>
+                            <article className="metric-card metric-card-strong">
+                              <span className="metric-label">Variacao</span>
+                              <strong>{comparisonReport.variacao}</strong>
+                              <p>Diferenca percentual do mes atual em relacao ao mes anterior.</p>
+                            </article>
+                          </div>
+
+                          <div className="report-intro-card comparison-highlight-card">
+                            <div>
+                              <strong>Leitura rapida do comparativo</strong>
+                              <p>
+                                Use esse resumo para identificar se o nivel de gasto subiu ou caiu de um mes para o outro
+                                e priorizar onde investigar.
+                              </p>
+                            </div>
+                            <span className="report-insight-badge">
+                              {comparisonReport.variacao}
+                              <small>variacao do periodo</small>
+                            </span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="dashboard-empty-state">
+                          <strong>Nenhum comparativo carregado.</strong>
+                          <p>Escolha os meses desejados para visualizar o resumo comparativo.</p>
+                        </div>
+                      )}
+                    </section>
+                  ) : null}
+
+                  {dashboardSection === 'relatorios' && reportSection === 'top-categorias' ? (
+                    <section className="dashboard-expenses report-section">
+                      <div className="dashboard-section-header">
+                        <div>
+                          <span className="feature-label">Relatorios / Top categorias</span>
+                          <h4>Categorias com maior peso no periodo</h4>
+                        </div>
+                      </div>
+
+                      <div className="report-tabs" role="tablist" aria-label="Tipos de relatorio">
+                        {reportMenuItems.map((reportItem) => (
+                          <button
+                            key={reportItem.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={reportSection === reportItem.id}
+                            className={`report-tab ${reportSection === reportItem.id ? 'report-tab-active' : ''}`}
+                            onClick={() => {
+                              setDashboardSection('relatorios')
+                              setReportSection(reportItem.id)
+                              navigateTo('/dashboard')
+                            }}
+                          >
+                            <span className="report-tab-title">{reportItem.title}</span>
+                            <small className="report-tab-description">{reportItem.description}</small>
+                          </button>
+                        ))}
+                      </div>
+
+                      <form className="report-filter-form" onSubmit={handleTopCategoryReportSubmit}>
+                        <label className="field">
+                          <span>Data inicial</span>
+                          <input
+                            type="date"
+                            name="dateFrom"
+                            value={topCategoryFilters.dateFrom}
+                            onChange={handleTopCategoryFilterChange}
+                            required
+                          />
+                        </label>
+
+                        <label className="field">
+                          <span>Data final</span>
+                          <input
+                            type="date"
+                            name="dateTo"
+                            value={topCategoryFilters.dateTo}
+                            onChange={handleTopCategoryFilterChange}
+                            required
+                          />
+                        </label>
+
+                        <button type="submit" className="primary-button" disabled={isLoadingTopCategoryReport}>
+                          {isLoadingTopCategoryReport ? 'Gerando...' : 'Gerar ranking'}
+                        </button>
+                      </form>
+
+                      {isLoadingTopCategoryReport ? (
+                        <div className="dashboard-empty-state">
+                          <strong>Gerando top categorias...</strong>
+                          <p>Aguarde enquanto calculamos as categorias com maior concentracao de gasto.</p>
+                        </div>
+                      ) : topCategoryItems.length === 0 ? (
+                        <div className="dashboard-empty-state">
+                          <strong>Nenhuma categoria encontrada para o periodo.</strong>
+                          <p>Escolha outro intervalo para montar o ranking de categorias.</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="report-intro-card">
+                            <div>
+                              <strong>Onde seu dinheiro mais se concentra</strong>
+                              <p>
+                                Esse ranking destaca as categorias que mais consomem o seu orçamento no intervalo
+                                selecionado.
+                              </p>
+                            </div>
+                            <span className="report-insight-badge">
+                              {topCategoryItems.length}
+                              <small>categorias no ranking</small>
+                            </span>
+                          </div>
+
+                          <div className="top-category-list">
+                            {topCategoryItems.map((item, index) => {
+                              const maxValue = Math.max(...topCategoryItems.map((entry) => entry.total), 1)
+                              const barWidth = Math.max(8, Math.round((item.total / maxValue) * 100))
+                              const isExpanded = Boolean(expandedTopCategoryNames[item.categoria])
+                              const categoryExpenses = getTopCategoryExpenseItems(item.categoria)
+
+                              return (
+                                <article key={`${item.categoria}-${index}`} className="top-category-item">
+                                  <div className="top-category-item-header">
+                                    <div>
+                                      <span className="top-category-rank">#{index + 1}</span>
+                                      <strong>{item.categoria}</strong>
+                                    </div>
+                                    <div className="top-category-item-actions">
+                                      <span className="top-category-value">
+                                        {currencyFormatter.format(item.total)}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        className="top-category-expand-button"
+                                        onClick={() => toggleTopCategoryDetails(item.categoria)}
+                                        aria-expanded={isExpanded}
+                                        aria-label={isExpanded ? `Ocultar gastos de ${item.categoria}` : `Exibir gastos de ${item.categoria}`}
+                                        title={isExpanded ? 'Ocultar detalhes' : 'Exibir detalhes'}
+                                      >
+                                        {isExpanded ? '-' : '+'}
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <div className="top-category-bar-track">
+                                    <span className="top-category-bar" style={{ width: `${barWidth}%` }} />
+                                  </div>
+                                  {isExpanded ? (
+                                    <div className="top-category-expense-list">
+                                      {categoryExpenses.length > 0 ? categoryExpenses.map((expense) => (
+                                        <div key={expense.id} className="top-category-expense-row">
+                                          <div>
+                                            <strong>{expense.descricao}</strong>
+                                            <span>
+                                              {expense.competencia
+                                                ? `Competencia ${formatCompetenceDisplay(expense.competencia)}`
+                                                : 'Sem competencia'}
+                                            </span>
+                                          </div>
+                                          <span className="top-category-expense-value">
+                                            {currencyFormatter.format(Number(expense.valor ?? 0))}
+                                          </span>
+                                        </div>
+                                      )) : (
+                                        <div className="top-category-expense-empty">
+                                          Nenhum gasto detalhado encontrado nessa categoria para o periodo.
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : null}
+                                </article>
+                              )
+                            })}
+                          </div>
+                        </>
+                      )}
+                    </section>
+                  ) : null}
+
+                  {dashboardSection === 'relatorios' && reportSection === 'quem-gasta-mais' ? (
+                    <section className="dashboard-expenses report-section">
+                      <div className="dashboard-section-header">
+                        <div>
+                          <span className="feature-label">Relatorios / Quem gasta mais</span>
+                          <h4>Ranking entre usuarios da conta conjunta</h4>
+                        </div>
+                      </div>
+
+                      <div className="report-tabs" role="tablist" aria-label="Tipos de relatorio">
+                        {reportMenuItems.map((reportItem) => (
+                          <button
+                            key={reportItem.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={reportSection === reportItem.id}
+                            className={`report-tab ${reportSection === reportItem.id ? 'report-tab-active' : ''}`}
+                            onClick={() => {
+                              setDashboardSection('relatorios')
+                              setReportSection(reportItem.id)
+                              navigateTo('/dashboard')
+                            }}
+                          >
+                            <span className="report-tab-title">{reportItem.title}</span>
+                            <small className="report-tab-description">{reportItem.description}</small>
+                          </button>
+                        ))}
+                      </div>
+
+                      <form className="report-filter-form" onSubmit={handleWhoSpendsMoreReportSubmit}>
+                        <label className="field">
+                          <span>Data inicial</span>
+                          <input
+                            type="date"
+                            name="dateFrom"
+                            value={whoSpendsMoreFilters.dateFrom}
+                            onChange={handleWhoSpendsMoreFilterChange}
+                            required
+                          />
+                        </label>
+
+                        <label className="field">
+                          <span>Data final</span>
+                          <input
+                            type="date"
+                            name="dateTo"
+                            value={whoSpendsMoreFilters.dateTo}
+                            onChange={handleWhoSpendsMoreFilterChange}
+                            required
+                          />
+                        </label>
+
+                        <button type="submit" className="primary-button" disabled={isLoadingWhoSpendsMoreReport}>
+                          {isLoadingWhoSpendsMoreReport ? 'Gerando...' : 'Gerar ranking'}
+                        </button>
+                      </form>
+
+                      {isLoadingWhoSpendsMoreReport ? (
+                        <div className="dashboard-empty-state">
+                          <strong>Gerando ranking...</strong>
+                          <p>Aguarde enquanto consolidamos os gastos dos dois usuarios da conta conjunta.</p>
+                        </div>
+                      ) : whoSpendsMoreReport?.usuario1 && whoSpendsMoreReport?.usuario2 ? (
+                        <>
+                          <div className="report-intro-card">
+                            <div>
+                              <strong>Quem puxou mais o gasto do periodo</strong>
+                              <p>
+                                O painel compara os dois usuarios da conta conjunta e mostra a participacao percentual
+                                de cada um no total de despesas visiveis para o intervalo selecionado.
+                              </p>
+                            </div>
+                            <span className="report-insight-badge">
+                              {whoSpendsMoreReport.usuario1.percentual}%
+                              <small>lider do ranking</small>
+                            </span>
+                          </div>
+
+                          <div className="who-spends-more-grid">
+                            {[whoSpendsMoreReport.usuario1, whoSpendsMoreReport.usuario2].map((usuario, index) => (
+                              <article
+                                key={`${usuario.nome}-${index}`}
+                                className={`who-spends-more-card ${index === 0 ? 'who-spends-more-card-leading' : ''}`}
+                              >
+                                <span className="feature-label">{index === 0 ? 'Maior gasto' : 'Segundo lugar'}</span>
+                                <strong>{usuario.nome}</strong>
+                                <div className="who-spends-more-value">
+                                  {currencyFormatter.format(Number(usuario.total ?? 0))}
+                                </div>
+                                <p>{usuario.percentual}% do total consolidado entre os participantes.</p>
+                              </article>
+                            ))}
+                          </div>
+
+                          <div className="who-spends-more-bar-card">
+                            <div className="who-spends-more-bar-header">
+                              <strong>Participacao no total do periodo</strong>
+                              <span>
+                                {whoSpendsMoreReport.usuario1.nome} x {whoSpendsMoreReport.usuario2.nome}
+                              </span>
+                            </div>
+                            <div className="who-spends-more-bar-track" aria-hidden="true">
+                              <span
+                                className="who-spends-more-bar who-spends-more-bar-leading"
+                                style={{ width: `${whoSpendsMoreReport.usuario1.percentual}%` }}
+                              />
+                              <span
+                                className="who-spends-more-bar who-spends-more-bar-secondary"
+                                style={{ width: `${whoSpendsMoreReport.usuario2.percentual}%` }}
+                              />
+                            </div>
+                            <div className="who-spends-more-legend">
+                              <span>{whoSpendsMoreReport.usuario1.nome}: {whoSpendsMoreReport.usuario1.percentual}%</span>
+                              <span>{whoSpendsMoreReport.usuario2.nome}: {whoSpendsMoreReport.usuario2.percentual}%</span>
+                            </div>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="dashboard-empty-state">
+                          <strong>Nenhum ranking disponivel para o periodo.</strong>
+                          <p>Verifique se existe uma conta conjunta ativa e gastos suficientes no intervalo informado.</p>
+                        </div>
+                      )}
+                    </section>
+                  ) : null}
+
+                  {dashboardSection === 'relatorios' && !['evolucao-mensal', 'comparativo-mensal', 'top-categorias', 'quem-gasta-mais'].includes(reportSection) ? (
+                    <section className="dashboard-expenses report-section">
+                      <div className="dashboard-section-header">
+                        <div>
+                          <span className="feature-label">Relatorios / Em construcao</span>
+                          <h4>{reportMenuItems.find((item) => item.id === reportSection)?.title || 'Relatorio'}</h4>
+                        </div>
+                      </div>
+
+                      <div className="report-tabs" role="tablist" aria-label="Tipos de relatorio">
+                        {reportMenuItems.map((reportItem) => (
+                          <button
+                            key={reportItem.id}
+                            type="button"
+                            role="tab"
+                            aria-selected={reportSection === reportItem.id}
+                            className={`report-tab ${reportSection === reportItem.id ? 'report-tab-active' : ''}`}
+                            onClick={() => {
+                              setDashboardSection('relatorios')
+                              setReportSection(reportItem.id)
+                              navigateTo('/dashboard')
+                            }}
+                          >
+                            <span className="report-tab-title">{reportItem.title}</span>
+                            <small className="report-tab-description">{reportItem.description}</small>
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="dashboard-empty-state">
+                        <strong>Esse relatorio entra como exemplo de navegacao.</strong>
+                        <p>
+                          A estrutura do submenu ja esta pronta para receber as versoes reais de
+                          comparativo mensal, top categorias e comportamento.
+                        </p>
+                      </div>
                     </section>
                   ) : null}
 
@@ -2223,6 +4261,395 @@ function App() {
                           )}
                         </div>
                       </div>
+                    </section>
+                  ) : null}
+
+                  {dashboardSection === 'cartoes' ? (
+                    <section className="dashboard-expenses">
+                      <div className="dashboard-section-header">
+                        <div>
+                          <span className="feature-label">Credito</span>
+                          <h4>Cartoes de credito</h4>
+                        </div>
+                      </div>
+
+                      <div className="credit-card-layout">
+                        <form className="credit-card-form-card" onSubmit={handleCreditCardSubmit}>
+                          <div className="category-list-header">
+                            <div>
+                              <span className="feature-label">{selectedCreditCard ? 'Edicao' : 'Cadastro'}</span>
+                              <h5>{selectedCreditCard ? 'Editar cartao' : 'Novo cartao'}</h5>
+                            </div>
+                          </div>
+
+                          <label className="field">
+                            <span>Descricao do cartao</span>
+                            <input
+                              type="text"
+                              name="descricao"
+                              placeholder="Ex.: Nubank, Inter, Cartao da empresa"
+                              minLength={2}
+                              value={creditCardForm.descricao}
+                              onChange={handleCreditCardChange}
+                              required
+                            />
+                          </label>
+
+                          <div className="credit-card-days-grid">
+                            <label className="field">
+                              <span>Fechamento</span>
+                              <input
+                                type="number"
+                                name="diaFechamento"
+                                min="1"
+                                max="31"
+                                placeholder="10"
+                                value={creditCardForm.diaFechamento}
+                                onChange={handleCreditCardChange}
+                                required
+                              />
+                            </label>
+
+                            <label className="field">
+                              <span>Vencimento</span>
+                              <input
+                                type="number"
+                                name="diaVencimento"
+                                min="1"
+                                max="31"
+                                placeholder="17"
+                                value={creditCardForm.diaVencimento}
+                                onChange={handleCreditCardChange}
+                                required
+                              />
+                            </label>
+                          </div>
+
+                          <label className="field">
+                            <span>Limite do cartao</span>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              name="valorLimite"
+                              placeholder="0,00"
+                              value={creditCardForm.valorLimite}
+                              onChange={handleCreditCardChange}
+                              required
+                            />
+                          </label>
+
+                          <label className="field">
+                            <span>Observacoes</span>
+                            <textarea
+                              name="observacoes"
+                              rows="4"
+                              placeholder="Ex.: Cartao usado para gastos recorrentes da casa."
+                              value={creditCardForm.observacoes}
+                              onChange={handleCreditCardChange}
+                            />
+                          </label>
+
+                          <div className="credit-card-preview">
+                            <span className="feature-label">Preview</span>
+                            <strong>{creditCardForm.descricao || 'Novo cartao'}</strong>
+                            <p>
+                              Fecha dia {creditCardForm.diaFechamento || '--'} e vence dia{' '}
+                              {creditCardForm.diaVencimento || '--'}.
+                            </p>
+                            <p>Limite {creditCardForm.valorLimite ? `R$ ${creditCardForm.valorLimite}` : 'a definir'}.</p>
+                          </div>
+
+                          <div className="expense-edit-actions">
+                            {selectedCreditCard ? (
+                              <button type="button" className="secondary-button" onClick={cancelCreditCardEdit} disabled={isSavingCreditCard}>
+                                Cancelar edicao
+                              </button>
+                            ) : null}
+                            <button type="submit" className="primary-button" disabled={isSavingCreditCard}>
+                              {isSavingCreditCard ? 'Salvando...' : selectedCreditCard ? 'Salvar alteracoes' : 'Criar cartao'}
+                            </button>
+                          </div>
+                        </form>
+
+                        <div className="credit-card-list-card">
+                          <div className="category-list-header">
+                            <div>
+                              <span className="feature-label">Carteira</span>
+                              <h5>Cartoes cadastrados</h5>
+                            </div>
+                            <span className="category-counter">{creditCards.length}</span>
+                          </div>
+
+                          {isLoadingCreditCards ? (
+                            <div className="dashboard-empty-state">
+                              <strong>Carregando cartoes...</strong>
+                              <p>Aguarde enquanto buscamos os cartoes vinculados ao usuario logado.</p>
+                            </div>
+                          ) : creditCards.length === 0 ? (
+                            <div className="dashboard-empty-state">
+                              <strong>Nenhum cartao encontrado</strong>
+                              <p>Cadastre seu primeiro cartao usando o formulario ao lado.</p>
+                            </div>
+                          ) : (
+                            <div className="credit-card-list">
+                              {creditCards.map((card) => {
+                                const currentUsage = Number(creditCardUsageById.get(card.id) ?? 0)
+                                const limit = Number(card.valorLimite ?? 0)
+                                const usagePercent = limit > 0 ? (currentUsage / limit) * 100 : 0
+                                const usageLevel = currentUsage > limit
+                                  ? 'critical'
+                                  : usagePercent >= 80
+                                    ? 'warning'
+                                    : 'safe'
+
+                                return (
+                                  <article
+                                    key={card.id}
+                                    className={`credit-card-item${card.origemCartao === 'conta_conjunta' ? ' credit-card-item-disabled' : ''}`}
+                                    onClick={card.origemCartao === 'conta_conjunta' ? undefined : () => openCreditCardEdit(card)}
+                                    title={card.origemCartao === 'conta_conjunta' ? 'Somente o titular pode editar este cartao.' : 'Editar cartao'}
+                                  >
+                                    <div className="credit-card-item-header">
+                                      <div>
+                                        <span className="feature-label">Cartao de credito</span>
+                                        <h5>{card.descricao}</h5>
+                                        {card.origemCartao === 'conta_conjunta' ? (
+                                          <p className="credit-card-shared-note">
+                                            Titular: {card.usuarioNome || 'usuario da conta conjunta'}
+                                          </p>
+                                        ) : null}
+                                      </div>
+                                      <span className="category-id">#{card.id.slice(0, 8)}</span>
+                                    </div>
+
+                                    <div className="credit-card-item-details">
+                                      <span>Limite {currencyFormatter.format(limit)}</span>
+                                      <span className={`credit-card-usage-pill credit-card-usage-pill-${usageLevel}`}>
+                                        Em uso {currencyFormatter.format(currentUsage)}
+                                      </span>
+                                      <span>Fecha dia {card.diaFechamento}</span>
+                                      <span>Vence dia {card.diaVencimento}</span>
+                                    </div>
+
+                                    {card.observacoes ? <p>{card.observacoes}</p> : null}
+                                  </article>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {dashboardSection === 'faturas' ? (
+                    <section className="dashboard-expenses">
+                      <div className="dashboard-section-header">
+                        <div>
+                          <span className="feature-label">Cartoes / Faturas</span>
+                          <h4>Faturas dos cartoes</h4>
+                        </div>
+                      </div>
+
+                      <div className="invoice-toolbar">
+                        <label className="field">
+                          <span>Filtrar por cartao</span>
+                          <select
+                            name="cartaoCreditoId"
+                            value={invoiceFilters.cartaoCreditoId}
+                            onChange={handleInvoiceFilterChange}
+                          >
+                            <option value="todos">Todos os cartoes</option>
+                            {creditCards.map((card) => {
+                              const isSharedCard = card.origemCartao === 'conta_conjunta'
+                              const ownerLabel = isSharedCard
+                                ? `Conta conjunta - ${card.usuarioNome || 'usuario compartilhado'}`
+                                : 'Meu cartao'
+
+                              return (
+                                <option key={card.id} value={card.id}>
+                                  {`${card.descricao} | ${ownerLabel}`}
+                                </option>
+                              )
+                            })}
+                          </select>
+                        </label>
+
+                        <label className="field">
+                          <span>Filtrar por vencimento</span>
+                          <select
+                            name="dueMonth"
+                            value={invoiceFilters.dueMonth}
+                            onChange={handleInvoiceFilterChange}
+                          >
+                            <option value="">Todas as faturas do cartao</option>
+                            {availableInvoiceDueMonths.map((dueMonth) => (
+                              <option key={dueMonth} value={dueMonth}>
+                                {formatInvoiceDueMonthOption(dueMonth)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <label className="field">
+                          <span>Ordenar por vencimento</span>
+                          <select
+                            name="sortOrder"
+                            value={invoiceFilters.sortOrder}
+                            onChange={handleInvoiceFilterChange}
+                          >
+                            <option value="desc">Mais recente primeiro</option>
+                            <option value="asc">Mais antigo primeiro</option>
+                          </select>
+                        </label>
+                      </div>
+
+                      {isLoadingInvoices ? (
+                        <div className="dashboard-empty-state">
+                          <strong>Carregando faturas...</strong>
+                          <p>Aguarde enquanto buscamos as faturas dos cartoes acessiveis.</p>
+                        </div>
+                      ) : filteredCreditCardInvoices.length === 0 ? (
+                        <div className="dashboard-empty-state">
+                          <strong>Nenhuma fatura encontrada</strong>
+                          <p>
+                            {creditCardInvoices.length === 0
+                              ? 'As faturas serao criadas automaticamente quando um gasto for vinculado a um cartao.'
+                              : 'Nenhuma fatura corresponde ao cartao e ao periodo de vencimento selecionados.'}
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="invoice-grid">
+                          {sortedCreditCardInvoices.map((invoice) => {
+                            const total = Number(invoice.valorTotal ?? 0)
+                            const limit = Number(invoice.cartaoValorLimite ?? 0)
+                            const isSharedCard = invoice.origemCartao === 'conta_conjunta'
+                            const isCurrentInvoice = isCurrentCompetence(invoice.competencia)
+                            const canPayInvoice = !['paga', 'cancelada'].includes(invoice.status)
+                            const canReopenInvoice = invoice.status === 'paga'
+                            const invoiceItems = (invoiceItemsById.get(invoice.id) ?? []).slice().sort((firstItem, secondItem) => {
+                              const firstTime = firstItem.dueDate ? new Date(firstItem.dueDate).getTime() : 0
+                              const secondTime = secondItem.dueDate ? new Date(secondItem.dueDate).getTime() : 0
+                              return firstTime - secondTime
+                            })
+                            const isItemsExpanded = Boolean(expandedInvoiceIds[invoice.id])
+
+                            return (
+                              <article key={invoice.id} className={`invoice-card${isCurrentInvoice ? ' invoice-card-current' : ''}`}>
+                                <div className="invoice-card-main">
+                                  <div className="invoice-card-header">
+                                    <div>
+                                      <div className="invoice-title-row">
+                                        <span className="feature-label">{formatMonthlyReference(invoice.competencia)}</span>
+                                        {isCurrentInvoice ? <span className="invoice-current-pill">Fatura atual</span> : null}
+                                      </div>
+                                      <h5>{invoice.cartaoDescricao || 'Cartao de credito'}</h5>
+                                    </div>
+                                    <span className={`invoice-status invoice-status-${invoice.status}`}>
+                                      {invoice.status}
+                                    </span>
+                                  </div>
+
+                                  <strong className="invoice-total">
+                                    {total === 0 ? 'Sem lancamentos' : currencyFormatter.format(total)}
+                                  </strong>
+
+                                  <div className="invoice-summary-grid">
+                                    <div className="invoice-summary-item">
+                                      <span>Limite</span>
+                                      <strong>{currencyFormatter.format(limit)}</strong>
+                                    </div>
+                                    <div className="invoice-summary-item">
+                                      <span>Fechamento</span>
+                                      <strong>{invoice.dataFechamento ? dateFormatter.format(new Date(invoice.dataFechamento)) : '--'}</strong>
+                                    </div>
+                                    <div className="invoice-summary-item">
+                                      <span>Vencimento</span>
+                                      <strong>{invoice.dataVencimento ? dateFormatter.format(new Date(invoice.dataVencimento)) : '--'}</strong>
+                                    </div>
+                                    <div className="invoice-summary-item">
+                                      <span>Itens</span>
+                                      <strong>{Number(invoice.totalGastos ?? 0)} vinculados</strong>
+                                    </div>
+                                    <div className="invoice-summary-item">
+                                      <span>Titular</span>
+                                      <strong>{isSharedCard ? invoice.cartaoUsuarioNome || 'usuario compartilhado' : 'voce'}</strong>
+                                    </div>
+                                  </div>
+
+                                  <button
+                                    type="button"
+                                    className="invoice-items-toggle"
+                                    onClick={() => toggleInvoiceItems(invoice.id)}
+                                    disabled={invoiceItems.length === 0}
+                                  >
+                                    <span>
+                                      {invoiceItems.length === 0
+                                        ? 'Nenhum item nesta fatura'
+                                        : isItemsExpanded
+                                          ? `Ocultar ${invoiceItems.length} itens`
+                                          : `Ver ${invoiceItems.length} itens`}
+                                    </span>
+                                    <strong>{invoiceItems.length}</strong>
+                                  </button>
+                                  {canPayInvoice ? (
+                                    <button
+                                      type="button"
+                                      className="primary-button invoice-pay-button"
+                                      onClick={() => openPayInvoiceModal(invoice)}
+                                    >
+                                      Pagar fatura
+                                    </button>
+                                  ) : null}
+                                  {canReopenInvoice ? (
+                                    <button
+                                      type="button"
+                                      className="secondary-button invoice-pay-button"
+                                      onClick={() => openReopenInvoiceModal(invoice)}
+                                    >
+                                      Reabrir fatura
+                                    </button>
+                                  ) : null}
+                                </div>
+
+                                {isItemsExpanded ? (
+                                  <div className="invoice-items-panel">
+                                    {invoiceItems.length > 0 ? (
+                                      <div className="invoice-items-list">
+                                        {invoiceItems.map((item) => (
+                                          <article key={item.id} className="invoice-item-row">
+                                            <div>
+                                              <strong>{item.label}</strong>
+                                              <p>
+                                                {item.competence ? `Competencia ${formatCompetenceDisplay(item.competence)} - ` : ''}
+                                                {item.dueDate ? `Vencimento ${dateFormatter.format(new Date(item.dueDate))}` : 'Sem vencimento'}
+                                              </p>
+                                              <p>
+                                                {item.createdAt
+                                                  ? `Cadastrado em ${dateFormatter.format(new Date(item.createdAt))}`
+                                                  : 'Data de cadastro indisponivel'}
+                                              </p>
+                                            </div>
+                                            <div className="invoice-item-side">
+                                              <strong>{currencyFormatter.format(item.amount)}</strong>
+                                              <span className={`invoice-item-status invoice-item-status-${item.status}`}>{item.status}</span>
+                                              <small>{item.ownerLabel}</small>
+                                            </div>
+                                          </article>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <div className="invoice-items-empty">
+                                        Nenhum item vinculado foi encontrado para esta fatura.
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : null}
+                              </article>
+                            )
+                          })}
+                        </div>
+                      )}
                     </section>
                   ) : null}
 
@@ -2413,18 +4840,92 @@ function App() {
         </div>
       </section>
 
+      <footer className="app-footer">
+        <span>NossoSaldo</span>
+        <a href="mailto:nossosaldoenterprise@gmail.com">nossosaldoenterprise@gmail.com</a>
+      </footer>
+
+      {creditCardLimitWarning ? (
+        <div className="modal-overlay" role="presentation" onClick={handleCancelLimitWarning}>
+          <div
+            className="confirm-modal warning-modal credit-limit-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="credit-limit-warning-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className="feature-label">Alerta de limite</span>
+            <span className="warning-modal-icon" aria-hidden="true">!</span>
+            <h3 id="credit-limit-warning-title">Limite do cartao em atencao</h3>
+            <p>
+              O cartao <strong>{creditCardLimitWarning.card.descricao}</strong> esta se aproximando
+              ou ultrapassando o limite cadastrado.
+            </p>
+
+            <div className="credit-limit-summary">
+              <span>{creditCardLimitWarning.cardOwner}</span>
+              <strong>{currencyFormatter.format(Number(creditCardLimitWarning.limit ?? 0))}</strong>
+              <small>Limite cadastrado do cartao.</small>
+            </div>
+
+            <div className="credit-limit-warning-list">
+              {creditCardLimitWarning.warnings.map((warning, index) => (
+                <article
+                  key={`${warning.level}-${warning.competence}-${index}`}
+                  className={`credit-limit-warning-item credit-limit-warning-item-${warning.level}`}
+                >
+                  <span>{warning.title}</span>
+                  <strong>{warning.competence}</strong>
+                  <p>{warning.description}</p>
+                  <small>
+                    Saldo em aberto atual: {currencyFormatter.format(Number(warning.currentTotal ?? 0))} |
+                    {' '}Disponivel antes deste gasto: {currencyFormatter.format(Number(warning.availableLimit ?? 0))}
+                  </small>
+                  {warning.level === 'critical' ? (
+                    <small>Revise o gasto ou atualize o limite do cartao antes de continuar.</small>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+
+            <div className="confirm-modal-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={handleCancelLimitWarning}
+                disabled={isSavingExpense}
+              >
+                Cancelar cadastro
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={handleContinueAfterLimitWarning}
+                disabled={isSavingExpense}
+              >
+                {isSavingExpense ? 'Salvando...' : 'Continuar mesmo assim'}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {selectedExpense ? (
         <div className="modal-overlay" role="presentation" onClick={closePayExpenseModal}>
           <div
             className="confirm-modal"
             role="dialog"
             aria-modal="true"
-            aria-labelledby="confirm-pay-expense-title"
+            aria-labelledby="confirm-expense-action-title"
             onClick={(event) => event.stopPropagation()}
           >
             <span className="feature-label">Confirmacao</span>
-            <h3 id="confirm-pay-expense-title">
-              {expenseModalMode === 'delete' ? 'Excluir gasto' : 'Quitar gasto'}
+            <h3 id="confirm-expense-action-title">
+              {expenseModalMode === 'delete'
+                ? 'Excluir gasto'
+                : expenseModalMode === 'reopen'
+                  ? 'Reabrir gasto'
+                  : 'Quitar gasto'}
             </h3>
             <p>
               {expenseModalMode === 'delete'
@@ -2434,31 +4935,103 @@ function App() {
                     <strong>{currencyFormatter.format(Number(selectedExpense.valor ?? 0))}</strong>?
                   </>
                 )
-                : (
+                : expenseModalMode === 'reopen'
+                  ? (
+                    <>
+                      Deseja confirmar a reabertura do gasto <strong>{selectedExpense.descricao}</strong> no valor de{' '}
+                      <strong>{currencyFormatter.format(Number(selectedExpense.valor ?? 0))}</strong>?
+                    </>
+                  )
+                  : (
                   <>
                     Deseja confirmar a quitacao do gasto <strong>{selectedExpense.descricao}</strong> no valor de{' '}
                     <strong>{currencyFormatter.format(Number(selectedExpense.valor ?? 0))}</strong>?
                   </>
                 )}
             </p>
+            {expenseModalMode === 'reopen' ? (
+              <p>Ao confirmar, o gasto voltara para pendente. Se ele for parcelado e nao estiver vinculado a cartao, as parcelas tambem serao reabertas.</p>
+            ) : null}
             <div className="confirm-modal-actions">
               <button
                 type="button"
                 className="secondary-button"
                 onClick={closePayExpenseModal}
-                disabled={isPayingExpense || isDeletingExpense}
+                disabled={isPayingExpense || isDeletingExpense || isReopeningExpense}
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 className={expenseModalMode === 'delete' ? 'danger-button' : 'primary-button'}
-                onClick={expenseModalMode === 'delete' ? handleDeleteExpense : handlePayExpense}
-                disabled={isPayingExpense || isDeletingExpense}
+                onClick={
+                  expenseModalMode === 'delete'
+                    ? handleDeleteExpense
+                    : expenseModalMode === 'reopen'
+                      ? handleReopenExpense
+                      : handlePayExpense
+                }
+                disabled={isPayingExpense || isDeletingExpense || isReopeningExpense}
               >
                 {expenseModalMode === 'delete'
                   ? (isDeletingExpense ? 'Excluindo...' : 'Confirmar exclusao')
-                  : (isPayingExpense ? 'Quitando...' : 'Confirmar quitacao')}
+                  : expenseModalMode === 'reopen'
+                    ? (isReopeningExpense ? 'Reabrindo...' : 'Confirmar reabertura')
+                    : (isPayingExpense ? 'Quitando...' : 'Confirmar quitacao')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedInvoice ? (
+        <div className="modal-overlay" role="presentation" onClick={closePayInvoiceModal}>
+          <div
+            className="confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-invoice-action-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className="feature-label">Confirmacao</span>
+            <h3 id="confirm-invoice-action-title">{invoiceModalMode === 'reopen' ? 'Reabrir fatura' : 'Quitar fatura'}</h3>
+            {invoiceModalMode === 'reopen' ? (
+              <>
+                <p>
+                  Isso vai reabrir a fatura <strong>{formatMonthlyReference(selectedInvoice.competencia)}</strong> e desfazer a
+                  quitacao de todos os gastos e parcelas vinculados a ela.
+                </p>
+                <p>Caso queira continuar, confirme a reabertura abaixo.</p>
+              </>
+            ) : (
+              <>
+                <p>
+                  Deseja confirmar a quitacao da fatura <strong>{formatMonthlyReference(selectedInvoice.competencia)}</strong>{' '}
+                  no valor de <strong>{currencyFormatter.format(Number(selectedInvoice.valorTotal ?? 0))}</strong>?
+                </p>
+                <p>
+                  Ao confirmar, todos os gastos e parcelas vinculados a esta fatura serao marcados como pagos.
+                </p>
+              </>
+            )}
+            <div className="confirm-modal-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={closePayInvoiceModal}
+                disabled={isPayingInvoice || isReopeningInvoice}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={invoiceModalMode === 'reopen' ? handleReopenInvoice : handlePayInvoice}
+                disabled={isPayingInvoice || isReopeningInvoice}
+              >
+                {invoiceModalMode === 'reopen'
+                  ? (isReopeningInvoice ? 'Reabrindo...' : 'Confirmar reabertura')
+                  : (isPayingInvoice ? 'Quitando...' : 'Confirmar quitacao')}
               </button>
             </div>
           </div>
@@ -2563,6 +5136,34 @@ function App() {
                 className="primary-button"
                 onClick={closeLoginErrorModal}
               >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {creditCardDueDateNotice ? (
+        <div className="modal-overlay" role="presentation" onClick={closeCreditCardDueDateNotice}>
+          <div
+            className="confirm-modal warning-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="credit-card-due-date-notice-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <span className="warning-modal-icon" aria-hidden="true">!</span>
+            <h3 id="credit-card-due-date-notice-title">Vencimento ajustado para a proxima fatura</h3>
+            <p>
+              O fechamento do cartao <strong>{creditCardDueDateNotice.cardDescription}</strong> ja passou.
+              Por isso, o campo de vencimento foi alterado para{' '}
+              <strong>{dateFormatter.format(creditCardDueDateNotice.dueDate)}</strong>, que corresponde ao vencimento da fatura do mes seguinte.
+            </p>
+            <p>
+              Se quiser usar outra data, volte ao campo <strong>Vencimento</strong> e ajuste manualmente antes de salvar o gasto.
+            </p>
+            <div className="confirm-modal-actions confirm-modal-actions-single">
+              <button type="button" className="primary-button" onClick={closeCreditCardDueDateNotice}>
                 Entendi
               </button>
             </div>

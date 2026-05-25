@@ -149,6 +149,130 @@ export async function getJointAccounts(token) {
   return Array.isArray(responseBody?.data) ? responseBody.data : responseBody
 }
 
+export async function getCreditCards(token) {
+  const response = await fetch(`${API_URL}/cartoesCredito`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  const responseBody = await parseResponse(response)
+  return Array.isArray(responseBody?.data) ? responseBody.data : responseBody
+}
+
+export async function createCreditCard(token, payload) {
+  const response = await fetch(`${API_URL}/cartoesCredito`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  return parseResponse(response)
+}
+
+export async function updateCreditCard(token, cardId, payload) {
+  const response = await fetch(`${API_URL}/cartoesCredito/${cardId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  return parseResponse(response)
+}
+
+export async function getCreditCardInvoices(token, cardId = '') {
+  const query = cardId ? `?cartaoCreditoId=${encodeURIComponent(cardId)}` : ''
+  const response = await fetch(`${API_URL}/faturasCartao${query}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  const responseBody = await parseResponse(response)
+  return Array.isArray(responseBody?.data) ? responseBody.data : responseBody
+}
+
+export async function payCreditCardInvoice(token, invoiceId, payload = {}) {
+  const response = await fetch(`${API_URL}/faturasCartao/${invoiceId}/pagamento`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  return parseResponse(response)
+}
+
+export async function reopenCreditCardInvoice(token, invoiceId) {
+  const response = await fetch(`${API_URL}/faturasCartao/${invoiceId}/reabertura`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  return parseResponse(response)
+}
+
+export async function getMonthlyEvolutionReport(token, dateFrom, dateTo) {
+  const response = await fetch(`${API_URL}/relatorio/evolucaoMensal/${dateFrom}/${dateTo}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  const responseBody = await parseResponse(response)
+  return Array.isArray(responseBody?.data) ? responseBody.data : responseBody
+}
+
+export async function getMonthlyComparisonReport(token, currentMonth, previousMonth) {
+  const currentMonthEnd = `${currentMonth}-31`
+  const previousMonthStart = `${previousMonth}-01`
+  const response = await fetch(`${API_URL}/relatorio/comparativoMensal/${currentMonthEnd}/${previousMonthStart}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  return parseResponse(response)
+}
+
+export async function getTopCategoryReport(token, dateFrom, dateTo) {
+  const response = await fetch(`${API_URL}/relatorio/topCategoria/${dateFrom}/${dateTo}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  const responseBody = await parseResponse(response)
+  return Array.isArray(responseBody?.data) ? responseBody.data : responseBody
+}
+
+export async function getWhoSpendsMoreReport(token, dateFrom, dateTo) {
+  const response = await fetch(`${API_URL}/relatorio/quemGastaMais/${dateFrom}/${dateTo}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  return parseResponse(response)
+}
+
 export async function createJointAccount(token, payload) {
   const response = await fetch(`${API_URL}/criarContaConjunta`, {
     method: 'POST',
@@ -195,6 +319,18 @@ export async function payExpense(token, expenseId, payload = {}) {
       'x-access-token': token,
     },
     body: JSON.stringify(payload),
+  })
+
+  return parseResponse(response)
+}
+
+export async function reopenExpense(token, expenseId) {
+  const response = await fetch(`${API_URL}/pagarGastos/${expenseId}/reabertura`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
   })
 
   return parseResponse(response)
