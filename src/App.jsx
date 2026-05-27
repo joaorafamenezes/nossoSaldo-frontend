@@ -33,6 +33,8 @@ import {
   validateEmail,
 } from './services/api'
 
+const isDevelopmentEnvironment = import.meta.env.DEV
+
 const initialForm = {
   email: '',
   senha: '',
@@ -2728,7 +2730,9 @@ function App() {
       <section className="login-panel">
         <div className={isDashboardRoute && profile ? 'dashboard-card' : 'login-card'}>
           <div className="login-card-header">
-            <span className={`status-pill status-pill-${status.type}`}>{status.type}</span>
+            {isDevelopmentEnvironment ? (
+              <span className={`status-pill status-pill-${status.type}`}>{status.type}</span>
+            ) : null}
             <h2>
               {isPasswordResetRoute
                 ? isRecoveryFlow
