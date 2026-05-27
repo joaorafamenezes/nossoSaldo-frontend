@@ -4827,14 +4827,6 @@ function App() {
               <button type="submit" className="primary-button" disabled={isSubmitting}>
                 {isSubmitting ? 'Entrando...' : 'Acessar conta'}
               </button>
-
-              <button type="button" className="secondary-button" onClick={() => navigateTo('/cadastro')}>
-                Criar nova conta
-              </button>
-
-              <button type="button" className="secondary-button" onClick={() => navigateTo('/redefinir-senha')}>
-                Esqueci minha senha
-              </button>
             </form>
           )}
         </div>
