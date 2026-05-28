@@ -246,6 +246,24 @@ function normalizeCompetenceForPayload(value) {
   return value
 }
 
+function getCompetenceMonthFromDueDate(value) {
+  if (!value) {
+    return ''
+  }
+
+  if (typeof value === 'string' && /^\d{4}-\d{2}/.test(value)) {
+    return value.slice(0, 7)
+  }
+
+  const date = new Date(value)
+
+  if (Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
 function formatMonthlyReference(reference) {
   if (!reference) {
     return ''
@@ -1175,6 +1193,15 @@ function App() {
           ...current,
           cartaoCreditoId: value,
           dataVencimento: invoiceDueDate.dueDateValue,
+          competencia: getCompetenceMonthFromDueDate(invoiceDueDate.dueDateValue) || current.competencia,
+        }
+      }
+
+      if (name === 'dataVencimento') {
+        return {
+          ...current,
+          dataVencimento: value,
+          competencia: getCompetenceMonthFromDueDate(value) || current.competencia,
         }
       }
 
@@ -2492,13 +2519,14 @@ function App() {
       return
     }
 
+    const competenceMonth = getCompetenceMonthFromDueDate(expenseForm.dataVencimento) || expenseForm.competencia
     const payload = {
       descricao: expenseForm.descricao,
       tipo: expenseForm.tipo,
       status: expenseForm.status,
       naoCompartilhar: jointAccounts.length > 0 ? expenseForm.naoCompartilhar : false,
       valor: parseCurrencyInput(expenseForm.valor),
-      competencia: normalizeCompetenceForPayload(expenseForm.competencia),
+      competencia: normalizeCompetenceForPayload(competenceMonth),
       dataVencimento: expenseForm.dataVencimento || null,
       dataFimRecorrencia: expenseForm.origemLancamento === 'recorrente'
         ? (expenseForm.dataFimRecorrencia || null)
@@ -2573,6 +2601,14 @@ function App() {
       return
     }
 
+    if (!expenseForm.dataVencimento) {
+      setStatus({
+        type: 'error',
+        message: 'Informe a data de vencimento para cadastrar o gasto.',
+      })
+      return
+    }
+
     if (expenseForm.origemLancamento === 'parcelado') {
       const totalInstallments = Number(expenseForm.numeroParcelas)
 
@@ -2585,6 +2621,7 @@ function App() {
       }
     }
 
+    const competenceMonth = getCompetenceMonthFromDueDate(expenseForm.dataVencimento) || expenseForm.competencia
     const payload = {
       descricao: expenseForm.descricao,
       tipo: expenseForm.tipo,
@@ -2593,7 +2630,7 @@ function App() {
       numeroParcelas: expenseForm.origemLancamento === 'parcelado' ? Number(expenseForm.numeroParcelas) : 1,
       naoCompartilhar: jointAccounts.length > 0 ? expenseForm.naoCompartilhar : false,
       valor: parseCurrencyInput(expenseForm.valor),
-      competencia: normalizeCompetenceForPayload(expenseForm.competencia),
+      competencia: normalizeCompetenceForPayload(competenceMonth),
       dataVencimento: expenseForm.dataVencimento || null,
       dataFimRecorrencia: expenseForm.origemLancamento === 'recorrente'
         ? (expenseForm.dataFimRecorrencia || null)
@@ -2645,37 +2682,6 @@ function App() {
       setStatus({
         type: 'success',
         message: response.message || 'Se o e-mail existir, enviaremos um link para redefinicao.',
-      })
-    } catch (error) {
-      setStatus({
-        type: 'error',
-        message: error.message || 'Nao foi possivel solicitar a redefinicao de senha.',
-      })
-    } finally {
-      setIsUpdatingPassword(false)
-    }
-  }
-
-  const handleAuthenticatedResetRequest = async () => {
-    if (!profile?.email) {
-      setStatus({
-        type: 'error',
-        message: 'Nao foi possivel identificar o e-mail do usuario logado.',
-      })
-      return
-    }
-
-    setIsUpdatingPassword(true)
-    setStatus({
-      type: 'loading',
-      message: `Enviando link de redefinicao para ${profile.email}...`,
-    })
-
-    try {
-      const response = await requestPasswordReset(profile.email)
-      setStatus({
-        type: 'success',
-        message: response.message || `Enviamos um link de redefinicao para ${profile.email}.`,
       })
     } catch (error) {
       setStatus({
@@ -3021,14 +3027,6 @@ function App() {
                   </nav>
 
                   <div className="dashboard-sidebar-actions">
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={handleAuthenticatedResetRequest}
-                      disabled={isUpdatingPassword}
-                    >
-                      {isUpdatingPassword ? 'Enviando...' : 'Redefinir senha'}
-                    </button>
                     <button type="button" className="secondary-button" onClick={handleLogout}>
                       Encerrar sessao
                     </button>
@@ -3232,7 +3230,7 @@ function App() {
                                 name="dataVencimento"
                                 value={expenseForm.dataVencimento}
                                 onChange={handleExpenseFormChange}
-                                required={isExpenseCreateRoute && ['parcelado', 'recorrente'].includes(expenseForm.origemLancamento)}
+                                required={isExpenseCreateRoute}
                               />
                             </label>
                           </div>
