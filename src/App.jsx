@@ -4790,14 +4790,6 @@ function App() {
               <button type="button" className="primary-button ghost-button" onClick={handleLogout}>
                 Sair da sessao
               </button>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={handleAuthenticatedResetRequest}
-                disabled={isUpdatingPassword}
-              >
-                {isUpdatingPassword ? 'Enviando...' : 'Redefinir senha'}
-              </button>
             </div>
           ) : (
             <form className="login-form" onSubmit={handleSubmit}>
