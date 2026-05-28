@@ -1006,7 +1006,7 @@ function App() {
     return () => {
       isMounted = false
     }
-  }, [token, profile, isExpenseCreateRoute, categories, jointAccounts, creditCards])
+  }, [token, profile, isExpenseCreateRoute])
 
   useEffect(() => {
     if (!token || !profile || !isExpenseEditRoute || !editingExpenseId) {
@@ -1074,7 +1074,7 @@ function App() {
     return () => {
       isMounted = false
     }
-  }, [token, profile, isExpenseEditRoute, editingExpenseId, categories, jointAccounts, creditCards])
+  }, [token, profile, isExpenseEditRoute, editingExpenseId])
 
   const handleChange = ({ target }) => {
     const { name, value } = target
