@@ -1710,6 +1710,13 @@ function App() {
         return category?.descricao === categoryName && isDateInRange(expense.competencia, topCategoryFilters.dateFrom, topCategoryFilters.dateTo)
       })
       .sort((firstExpense, secondExpense) => {
+        const firstValue = Number(firstExpense.valor ?? 0)
+        const secondValue = Number(secondExpense.valor ?? 0)
+
+        if (secondValue !== firstValue) {
+          return secondValue - firstValue
+        }
+
         const firstDate = firstExpense.competencia ? new Date(firstExpense.competencia).getTime() : 0
         const secondDate = secondExpense.competencia ? new Date(secondExpense.competencia).getTime() : 0
         return secondDate - firstDate
@@ -3433,10 +3440,12 @@ function App() {
                                                 <div className="expense-card-badges">
                                                   <span className={`expense-badge expense-badge-${expense.tipo}`}>{expense.tipo}</span>
                                                   {effectiveStatus === 'pago' ? (
-                                                    <span className="expense-paid-label">Quitado</span>
+                                                  <span className="expense-paid-label">Quitado</span>
                                                   ) : effectiveStatus === 'atrasado' ? (
                                                     <span className="expense-overdue-label">Atrasado</span>
-                                                  ) : null}
+                                                  ) : (
+                                                    <span className="expense-pending-label">Pendente</span>
+                                                  )}
                                                 </div>
                                                 <h5>{expense.descricao}</h5>
                                                 <p className="expense-card-subtitle">
@@ -3531,11 +3540,9 @@ function App() {
                                                   ? `Vencimento ${dateFormatter.format(new Date(expense.dataVencimento))}`
                                                   : 'Sem vencimento informado'}
                                               </span>
-                                              <span>
-                                                {expense.dataPagamento
-                                                  ? `Pagamento ${dateFormatter.format(new Date(expense.dataPagamento))}`
-                                                  : 'Pagamento pendente'}
-                                              </span>
+                                              {expense.dataPagamento ? (
+                                                <span>Pagamento {dateFormatter.format(new Date(expense.dataPagamento))}</span>
+                                              ) : null}
                                               <span>
                                                 {expense.createdAt
                                                   ? `Criado em ${dateFormatter.format(new Date(expense.createdAt))}`
@@ -4821,6 +4828,18 @@ function App() {
               <button type="submit" className="primary-button" disabled={isSubmitting}>
                 {isSubmitting ? 'Entrando...' : 'Acessar conta'}
               </button>
+
+              {isDevelopmentEnvironment ? (
+                <>
+                  <button type="button" className="secondary-button" onClick={() => navigateTo('/cadastro')}>
+                    Criar nova conta
+                  </button>
+
+                  <button type="button" className="secondary-button" onClick={() => navigateTo('/redefinir-senha')}>
+                    Esqueci minha senha
+                  </button>
+                </>
+              ) : null}
             </form>
           )}
         </div>
