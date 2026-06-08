@@ -98,6 +98,20 @@ export async function getExpenses(token) {
     }
   }
 
+  if (Array.isArray(responseBody)) {
+    return {
+      gastos: responseBody,
+      totalRegistros: responseBody.length,
+    }
+  }
+
+  if (Array.isArray(responseBody?.gastos)) {
+    return {
+      gastos: responseBody.gastos,
+      totalRegistros: Number(responseBody.totalRegistros ?? responseBody.gastos.length),
+    }
+  }
+
   return responseBody
 }
 
@@ -264,6 +278,17 @@ export async function getTopCategoryReport(token, dateFrom, dateTo) {
 
 export async function getWhoSpendsMoreReport(token, dateFrom, dateTo) {
   const response = await fetch(`${API_URL}/relatorio/quemGastaMais/${dateFrom}/${dateTo}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  return parseResponse(response)
+}
+
+export async function getInsights(token, dateFrom, dateTo) {
+  const response = await fetch(`${API_URL}/insights/gargalos/${dateFrom}/${dateTo}`, {
     headers: {
       'Content-Type': 'application/json',
       'x-access-token': token,

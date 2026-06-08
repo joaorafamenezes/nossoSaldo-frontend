@@ -14,6 +14,7 @@ import {
   getExpenseById,
   getExpenses,
   getJointAccounts,
+  getInsights,
   getMonthlyComparisonReport,
   getMonthlyEvolutionReport,
   getTopCategoryReport,
@@ -117,6 +118,33 @@ function getCurrentMonthRange() {
     status: 'abertos',
     tipo: 'todos',
     cartaoCreditoId: 'todos',
+  }
+}
+
+function getCurrentMonthDateRange() {
+  const { dateFrom, dateTo } = getCurrentMonthRange()
+  return { dateFrom, dateTo }
+}
+
+function getPreviousMonthDateRange() {
+  const now = new Date()
+  const firstDay = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const lastDay = new Date(now.getFullYear(), now.getMonth(), 0)
+
+  return {
+    dateFrom: firstDay.toISOString().slice(0, 10),
+    dateTo: lastDay.toISOString().slice(0, 10),
+  }
+}
+
+function getLastThirtyDaysRange() {
+  const endDate = new Date()
+  const startDate = new Date()
+  startDate.setDate(endDate.getDate() - 29)
+
+  return {
+    dateFrom: startDate.toISOString().slice(0, 10),
+    dateTo: endDate.toISOString().slice(0, 10),
   }
 }
 
@@ -588,6 +616,13 @@ function App() {
   const [expenseModalMode, setExpenseModalMode] = useState(null)
   const [expenseSuccessMessage, setExpenseSuccessMessage] = useState('')
   const [expenseFilters, setExpenseFilters] = useState(() => getCurrentMonthRange())
+  const [insightsFilters, setInsightsFilters] = useState(() => ({
+    ...getCurrentMonthDateRange(),
+    preset: 'mes-atual',
+  }))
+  const [insightsData, setInsightsData] = useState(null)
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false)
+  const [isInsightsExpanded, setIsInsightsExpanded] = useState(false)
   const [monthlyReportFilters, setMonthlyReportFilters] = useState(() => getDefaultMonthlyReportRange())
   const [monthlyReportRange, setMonthlyReportRange] = useState(() => getDefaultMonthlyReportRange())
   const [monthlyReportItems, setMonthlyReportItems] = useState([])
@@ -670,6 +705,7 @@ function App() {
       setJointAccounts([])
       setCreditCards([])
       setCreditCardInvoices([])
+      setInsightsData(null)
       return
     }
 
@@ -709,7 +745,9 @@ function App() {
   }, [token])
 
   useEffect(() => {
-    if (!token || !profile || !isDashboardRoute || dashboardSection !== 'gastos' || isExpenseEditRoute || isExpenseCreateRoute) {
+    const shouldHydrateExpenseData = ['gastos', 'diagnostico'].includes(dashboardSection)
+
+    if (!token || !profile || !isDashboardRoute || !shouldHydrateExpenseData || isExpenseEditRoute || isExpenseCreateRoute) {
       return
     }
 
@@ -719,8 +757,15 @@ function App() {
       setIsLoadingExpenses(true)
 
       try {
-        const [expensesResponse, categoriesResponse, creditCardsResponse] = await Promise.all([
-          getExpenses(token),
+        const expensesResponse = await getExpenses(token)
+
+        if (!isMounted) {
+          return
+        }
+
+        setExpenses(Array.isArray(expensesResponse.gastos) ? expensesResponse.gastos : [])
+
+        const [categoriesResult, creditCardsResult] = await Promise.allSettled([
           getCategories(token),
           getCreditCards(token),
         ])
@@ -729,9 +774,13 @@ function App() {
           return
         }
 
-        setExpenses(Array.isArray(expensesResponse.gastos) ? expensesResponse.gastos : [])
-        setCategories(Array.isArray(categoriesResponse) ? categoriesResponse : [])
-        setCreditCards(Array.isArray(creditCardsResponse) ? creditCardsResponse : [])
+        if (categoriesResult.status === 'fulfilled') {
+          setCategories(Array.isArray(categoriesResult.value) ? categoriesResult.value : [])
+        }
+
+        if (creditCardsResult.status === 'fulfilled') {
+          setCreditCards(Array.isArray(creditCardsResult.value) ? creditCardsResult.value : [])
+        }
       } catch (error) {
         if (!isMounted) {
           return
@@ -766,6 +815,53 @@ function App() {
     expenseFilters.tipo,
     expenseFilters.cartaoCreditoId,
   ])
+
+  useEffect(() => {
+    if (!token || !profile || !isDashboardRoute || dashboardSection !== 'gastos' || isExpenseEditRoute || isExpenseCreateRoute) {
+      return
+    }
+
+    let isMounted = true
+
+    const hydrateInsights = async () => {
+      const { dateFrom, dateTo } = insightsFilters
+
+      if (!dateFrom || !dateTo || dateTo < dateFrom) {
+        return
+      }
+
+      setIsLoadingInsights(true)
+
+      try {
+        const response = await getInsights(token, dateFrom, dateTo)
+
+        if (!isMounted) {
+          return
+        }
+
+        setInsightsData(response)
+      } catch (error) {
+        if (!isMounted) {
+          return
+        }
+
+        setStatus({
+          type: 'error',
+          message: error.message || 'Nao foi possivel carregar a analise do Radar.',
+        })
+      } finally {
+        if (isMounted) {
+          setIsLoadingInsights(false)
+        }
+      }
+    }
+
+    hydrateInsights()
+
+    return () => {
+      isMounted = false
+    }
+  }, [token, profile, isDashboardRoute, dashboardSection, isExpenseEditRoute, isExpenseCreateRoute])
 
   useEffect(() => {
     if (!token || !profile || !isDashboardRoute || dashboardSection !== 'relatorios') {
@@ -1220,6 +1316,15 @@ function App() {
     }))
   }
 
+  const handleInsightsFilterChange = ({ target }) => {
+    const { name, value } = target
+    setInsightsFilters((current) => ({
+      ...current,
+      [name]: value,
+      preset: name === 'preset' ? value : 'personalizado',
+    }))
+  }
+
   const handleInvoiceFilterChange = ({ target }) => {
     const { name, value } = target
     setInvoiceFilters((current) => ({
@@ -1471,6 +1576,152 @@ function App() {
     event.preventDefault()
     await loadWhoSpendsMoreReport(whoSpendsMoreFilters)
   }
+
+  const loadInsights = async (filters) => {
+    if (!token) {
+      return
+    }
+
+    const { dateFrom, dateTo } = filters
+
+    if (!dateFrom || !dateTo) {
+      setStatus({
+        type: 'error',
+        message: 'Informe a data inicial e a data final para o Radar analisar seus gastos.',
+      })
+      return
+    }
+
+    if (dateTo < dateFrom) {
+      setStatus({
+        type: 'error',
+        message: 'A data final do Radar deve ser maior ou igual a data inicial.',
+      })
+      return
+    }
+
+    setIsLoadingInsights(true)
+
+    try {
+      const response = await getInsights(token, dateFrom, dateTo)
+      setInsightsData(response)
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel atualizar a analise do Radar.',
+      })
+    } finally {
+      setIsLoadingInsights(false)
+    }
+  }
+
+  const handleInsightsSubmit = async (event) => {
+    event.preventDefault()
+    await loadInsights(insightsFilters)
+  }
+
+  const handleInsightsPresetSelect = async (preset) => {
+    const nextRange = preset === 'ultimos-30-dias'
+      ? getLastThirtyDaysRange()
+      : preset === 'mes-anterior'
+        ? getPreviousMonthDateRange()
+        : getCurrentMonthDateRange()
+    const nextFilters = {
+      ...nextRange,
+      preset,
+    }
+
+    setInsightsFilters(nextFilters)
+    await loadInsights(nextFilters)
+  }
+
+  const handleInsightsAction = (action) => {
+    if (!action?.tipo) {
+      return
+    }
+
+    const payload = action.payload || {}
+
+    if (action.tipo === 'abrir_gastos' || action.tipo === 'filtrar_gastos') {
+      setDashboardSection('gastos')
+      setExpenseFilters((current) => ({
+        ...current,
+        dateFrom: payload.dateFrom || insightsFilters.dateFrom,
+        dateTo: payload.dateTo || insightsFilters.dateTo,
+        status: payload.status || 'todos',
+        tipo: payload.tipo || current.tipo,
+        cartaoCreditoId: payload.cartaoCreditoId || current.cartaoCreditoId,
+      }))
+      navigateTo('/dashboard')
+      return
+    }
+
+    if (action.tipo === 'abrir_relatorio') {
+      const nextFilters = {
+        dateFrom: payload.dateFrom || insightsFilters.dateFrom,
+        dateTo: payload.dateTo || insightsFilters.dateTo,
+      }
+
+      setDashboardSection('relatorios')
+      setReportSection(payload.reportSection || 'top-categorias')
+
+      if ((payload.reportSection || 'top-categorias') === 'top-categorias') {
+        setTopCategoryFilters(nextFilters)
+      }
+
+      if (payload.reportSection === 'quem-gasta-mais') {
+        setWhoSpendsMoreFilters(nextFilters)
+      }
+
+      if (payload.reportSection === 'evolucao-mensal') {
+        setMonthlyReportFilters(nextFilters)
+      }
+
+      navigateTo('/dashboard')
+    }
+  }
+
+  const fallbackInsightsActions = [
+    {
+      tipo: 'abrir_gastos',
+      label: 'Ver gastos do periodo',
+      payload: {
+        status: 'todos',
+        dateFrom: insightsFilters.dateFrom,
+        dateTo: insightsFilters.dateTo,
+      },
+    },
+    {
+      tipo: 'abrir_gastos',
+      label: 'Ver atrasados',
+      payload: {
+        status: 'atrasado',
+        dateFrom: insightsFilters.dateFrom,
+        dateTo: insightsFilters.dateTo,
+      },
+    },
+    {
+      tipo: 'abrir_gastos',
+      label: 'Ver pendentes',
+      payload: {
+        status: 'abertos',
+        dateFrom: insightsFilters.dateFrom,
+        dateTo: insightsFilters.dateTo,
+      },
+    },
+    {
+      tipo: 'abrir_relatorio',
+      label: 'Abrir top categorias',
+      payload: {
+        reportSection: 'top-categorias',
+        dateFrom: insightsFilters.dateFrom,
+        dateTo: insightsFilters.dateTo,
+      },
+    },
+  ]
+  const insightsActions = Array.isArray(insightsData?.acoes) && insightsData.acoes.length > 0
+    ? insightsData.acoes
+    : fallbackInsightsActions
 
   const currentDateLabel = new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
@@ -2990,6 +3241,17 @@ function App() {
                     </button>
                     <button
                       type="button"
+                      className={`dashboard-nav-item ${dashboardSection === 'diagnostico' ? 'dashboard-nav-item-active' : ''}`}
+                      onClick={() => {
+                        setDashboardSection('diagnostico')
+                        navigateTo('/dashboard')
+                      }}
+                    >
+                      <span className="dashboard-nav-icon">!</span>
+                      <span>Diagnostico</span>
+                    </button>
+                    <button
+                      type="button"
                       className={`dashboard-nav-item ${dashboardSection === 'relatorios' ? 'dashboard-nav-item-active' : ''}`}
                       onClick={() => {
                         setDashboardSection('relatorios')
@@ -3068,6 +3330,179 @@ function App() {
                       <p>Diferenca entre receitas e despesas do periodo filtrado.</p>
                     </article>
                   </section>
+
+                  {dashboardSection === 'diagnostico' ? (
+                    <section className={`radar-panel radar-panel-${insightsData?.nivelAtencao || 'baixo'}`}>
+                    <div className="dashboard-section-header radar-panel-header">
+                      <div>
+                        <span className="feature-label">Radar</span>
+                        <h4>Diagnostico financeiro do periodo</h4>
+                        <p className="radar-panel-summary">
+                          {insightsData?.resumo || 'Analise automatica para identificar gargalos nos seus gastos.'}
+                        </p>
+                      </div>
+                      <div className="radar-panel-status">
+                        <span className={`radar-status-pill radar-status-pill-${insightsData?.nivelAtencao || 'baixo'}`}>
+                          {insightsData?.nivelAtencao || 'baixo'}
+                        </span>
+                        <button
+                          type="button"
+                          className="secondary-button"
+                          onClick={() => setIsInsightsExpanded((current) => !current)}
+                        >
+                          {isInsightsExpanded ? 'Ocultar detalhes' : 'Ver analise completa'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <form className="radar-filter-form" onSubmit={handleInsightsSubmit}>
+                      <div className="radar-preset-group" role="group" aria-label="Periodos sugeridos do Radar">
+                        <button
+                          type="button"
+                          className={`radar-preset-button ${insightsFilters.preset === 'mes-atual' ? 'radar-preset-button-active' : ''}`}
+                          onClick={() => handleInsightsPresetSelect('mes-atual')}
+                        >
+                          Mes atual
+                        </button>
+                        <button
+                          type="button"
+                          className={`radar-preset-button ${insightsFilters.preset === 'ultimos-30-dias' ? 'radar-preset-button-active' : ''}`}
+                          onClick={() => handleInsightsPresetSelect('ultimos-30-dias')}
+                        >
+                          Ultimos 30 dias
+                        </button>
+                        <button
+                          type="button"
+                          className={`radar-preset-button ${insightsFilters.preset === 'mes-anterior' ? 'radar-preset-button-active' : ''}`}
+                          onClick={() => handleInsightsPresetSelect('mes-anterior')}
+                        >
+                          Mes anterior
+                        </button>
+                      </div>
+
+                      <label className="field">
+                        <span>Data inicial</span>
+                        <input type="date" name="dateFrom" value={insightsFilters.dateFrom} onChange={handleInsightsFilterChange} />
+                      </label>
+
+                      <label className="field">
+                        <span>Data final</span>
+                        <input type="date" name="dateTo" value={insightsFilters.dateTo} onChange={handleInsightsFilterChange} />
+                      </label>
+
+                      <button type="submit" className="primary-button" disabled={isLoadingInsights}>
+                        {isLoadingInsights ? 'Analisando...' : 'Analisar novamente'}
+                      </button>
+                    </form>
+
+                    {isLoadingInsights ? (
+                      <div className="dashboard-empty-state">
+                        <strong>Radar em analise...</strong>
+                        <p>Estamos cruzando receitas, despesas e gargalos do periodo selecionado.</p>
+                      </div>
+                    ) : insightsData ? (
+                      <>
+                        <div className="radar-highlights">
+                          <article className="radar-highlight-card">
+                            <span className="metric-label">Receita analisada</span>
+                            <strong>{currencyFormatter.format(Number(insightsData.indicadores?.totalReceita ?? 0))}</strong>
+                          </article>
+                          <article className="radar-highlight-card">
+                            <span className="metric-label">Despesa analisada</span>
+                            <strong>{currencyFormatter.format(Number(insightsData.indicadores?.totalDespesa ?? 0))}</strong>
+                          </article>
+                          <article className="radar-highlight-card">
+                            <span className="metric-label">Uso da receita</span>
+                            <strong>{`${Number(insightsData.indicadores?.percentualUsoReceita ?? 0).toFixed(1)}%`}</strong>
+                          </article>
+                          <article className="radar-highlight-card">
+                            <span className="metric-label">Pendencias</span>
+                            <strong>{Number(insightsData.indicadores?.quantidadePendentes ?? 0) + Number(insightsData.indicadores?.quantidadeAtrasados ?? 0)}</strong>
+                          </article>
+                        </div>
+
+                        <div className="radar-body">
+                          <div className="radar-column">
+                            <span className="feature-label">Gargalos</span>
+                            {Array.isArray(insightsData.gargalos) && insightsData.gargalos.length > 0 ? (
+                              <div className="radar-list">
+                                {insightsData.gargalos.map((gargalo) => (
+                                  <article key={gargalo.codigo} className={`radar-item radar-item-${gargalo.severidade}`}>
+                                    <div className="radar-item-header">
+                                      <strong>{gargalo.titulo}</strong>
+                                      <span className={`radar-item-badge radar-item-badge-${gargalo.severidade}`}>{gargalo.severidade}</span>
+                                    </div>
+                                    <p>{gargalo.descricao}</p>
+                                  </article>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="dashboard-empty-state radar-empty-state">
+                                <strong>Nenhum gargalo relevante.</strong>
+                                <p>O Radar nao encontrou pontos criticos no periodo analisado.</p>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="radar-column">
+                            <span className="feature-label">Dicas praticas</span>
+                            <div className="radar-tips">
+                              {(insightsData.dicas || []).map((dica, index) => (
+                                <article key={`${index}-${dica}`} className="radar-tip-card">
+                                  <strong>{`Dica ${index + 1}`}</strong>
+                                  <p>{dica}</p>
+                                </article>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {isInsightsExpanded ? (
+                          <div className="radar-expanded-grid">
+                            <article className="dashboard-panel-card radar-detail-card">
+                              <span className="feature-label">Comparativo</span>
+                              <strong>{`${Number(insightsData.indicadores?.variacaoDespesas ?? 0).toFixed(1)}%`}</strong>
+                              <p>Variacao das despesas contra o periodo anterior equivalente.</p>
+                            </article>
+                            <article className="dashboard-panel-card radar-detail-card">
+                              <span className="feature-label">Saldo</span>
+                              <strong>{currencyFormatter.format(Number(insightsData.indicadores?.saldo ?? 0))}</strong>
+                              <p>Resultado entre receitas e despesas dentro do periodo analisado.</p>
+                            </article>
+                            <article className="dashboard-panel-card radar-detail-card radar-detail-card-wide">
+                              <span className="feature-label">Top categorias</span>
+                              {Array.isArray(insightsData.topCategorias) && insightsData.topCategorias.length > 0 ? (
+                                <div className="radar-top-categories">
+                                  {insightsData.topCategorias.map((categoria) => (
+                                    <div key={categoria.categoria} className="radar-top-category-row">
+                                      <strong>{categoria.categoria}</strong>
+                                      <span>{currencyFormatter.format(Number(categoria.totalGasto ?? 0))}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p>Nao houve categorias com despesas suficientes para destacar.</p>
+                              )}
+                            </article>
+                          </div>
+                        ) : null}
+
+                        <div className="radar-actions">
+                          {insightsActions.map((action, index) => (
+                            <button
+                              key={`${action.tipo}-${action.label || index}`}
+                              type="button"
+                              className="secondary-button"
+                              onClick={() => handleInsightsAction(action)}
+                            >
+                              {action.label || 'Abrir detalhe'}
+                            </button>
+                          ))}
+                        </div>
+                      </>
+                    ) : null}
+                    </section>
+                  ) : null}
 
                   {isExpenseEditRoute || isExpenseCreateRoute ? (
                     <section className="dashboard-expenses">
