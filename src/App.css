@@ -2845,6 +2845,11 @@
 :root[data-theme='dark'] .dashboard-panel-card,
 :root[data-theme='dark'] .dashboard-expenses,
 :root[data-theme='dark'] .radar-panel,
+:root[data-theme='dark'] .radar-highlight-card,
+:root[data-theme='dark'] .radar-item,
+:root[data-theme='dark'] .radar-tip-card,
+:root[data-theme='dark'] .radar-detail-card,
+:root[data-theme='dark'] .radar-preset-button,
 :root[data-theme='dark'] .report-tab,
 :root[data-theme='dark'] .top-category-item,
 :root[data-theme='dark'] .who-spends-more-card,
@@ -2883,6 +2888,10 @@
 :root[data-theme='dark'] .dashboard-sidebar-brand strong,
 :root[data-theme='dark'] .dashboard-sidebar-brand p,
 :root[data-theme='dark'] .dashboard-section-header h4,
+:root[data-theme='dark'] .radar-highlight-card strong,
+:root[data-theme='dark'] .radar-item-header strong,
+:root[data-theme='dark'] .radar-tip-card strong,
+:root[data-theme='dark'] .radar-detail-card strong,
 :root[data-theme='dark'] .dashboard-empty-state strong,
 :root[data-theme='dark'] .report-tab-title,
 :root[data-theme='dark'] .top-category-item strong,
@@ -2904,6 +2913,10 @@
 
 :root[data-theme='dark'] .feature-card p,
 :root[data-theme='dark'] .login-card-header p,
+:root[data-theme='dark'] .radar-panel-summary,
+:root[data-theme='dark'] .radar-item p,
+:root[data-theme='dark'] .radar-tip-card p,
+:root[data-theme='dark'] .radar-detail-card p,
 :root[data-theme='dark'] .dashboard-hero p,
 :root[data-theme='dark'] .metric-card p,
 :root[data-theme='dark'] .dashboard-empty-state p,
@@ -2985,6 +2998,90 @@
 :root[data-theme='dark'] .metric-card-balance {
   background: rgba(15, 23, 42, 0.88);
   border-color: rgba(100, 116, 139, 0.35);
+}
+
+:root[data-theme='dark'] .radar-panel {
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.08), transparent 26%),
+    linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.94));
+  border-color: rgba(103, 232, 249, 0.18);
+}
+
+:root[data-theme='dark'] .radar-panel-alto {
+  background:
+    radial-gradient(circle at top right, rgba(248, 113, 113, 0.12), transparent 24%),
+    linear-gradient(145deg, rgba(69, 10, 10, 0.94), rgba(15, 23, 42, 0.96));
+  border-color: rgba(248, 113, 113, 0.24);
+}
+
+:root[data-theme='dark'] .radar-panel-medio {
+  background:
+    radial-gradient(circle at top right, rgba(251, 191, 36, 0.1), transparent 26%),
+    linear-gradient(145deg, rgba(30, 41, 59, 0.96), rgba(15, 23, 42, 0.94));
+  border-color: rgba(251, 191, 36, 0.2);
+}
+
+:root[data-theme='dark'] .radar-panel-baixo {
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.08), transparent 26%),
+    linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.94));
+  border-color: rgba(103, 232, 249, 0.18);
+}
+
+:root[data-theme='dark'] .radar-preset-button:hover {
+  background: rgba(30, 41, 59, 0.98);
+  border-color: rgba(103, 232, 249, 0.24);
+}
+
+:root[data-theme='dark'] .radar-preset-button-active {
+  background: linear-gradient(135deg, #0f766e, #164e63);
+  color: #ecfeff;
+  border-color: transparent;
+  box-shadow: 0 16px 30px rgba(15, 118, 110, 0.24);
+}
+
+:root[data-theme='dark'] .radar-status-pill-baixo {
+  background: rgba(8, 145, 178, 0.18);
+  color: #67e8f9;
+}
+
+:root[data-theme='dark'] .radar-status-pill-medio {
+  background: rgba(217, 119, 6, 0.2);
+  color: #fcd34d;
+}
+
+:root[data-theme='dark'] .radar-status-pill-alto {
+  background: rgba(185, 28, 28, 0.24);
+  color: #fca5a5;
+}
+
+:root[data-theme='dark'] .radar-item-alta {
+  border-color: rgba(248, 113, 113, 0.22);
+  background: linear-gradient(145deg, rgba(69, 10, 10, 0.38), rgba(15, 23, 42, 0.92));
+}
+
+:root[data-theme='dark'] .radar-item-media {
+  border-color: rgba(251, 191, 36, 0.22);
+  background: linear-gradient(145deg, rgba(120, 53, 15, 0.24), rgba(15, 23, 42, 0.92));
+}
+
+:root[data-theme='dark'] .radar-item-badge-baixa {
+  background: rgba(8, 145, 178, 0.16);
+  color: #67e8f9;
+}
+
+:root[data-theme='dark'] .radar-item-badge-media {
+  background: rgba(217, 119, 6, 0.2);
+  color: #fcd34d;
+}
+
+:root[data-theme='dark'] .radar-item-badge-alta {
+  background: rgba(185, 28, 28, 0.22);
+  color: #fca5a5;
+}
+
+:root[data-theme='dark'] .radar-actions .secondary-button {
+  background: rgba(15, 23, 42, 0.94);
 }
 
 :root[data-theme='dark'] .dashboard-empty-state {
