@@ -2,10 +2,15 @@
   --page-bg: #f6efe6;
   --page-bg-deep: #f1f5f9;
   --surface: #ffffff;
+  --surface-soft: rgba(248, 250, 252, 0.82);
+  --surface-strong: rgba(255, 255, 255, 0.7);
   --text-main: #0f172a;
+  --text-strong: #0f172a;
   --text-soft: #475569;
   --text-muted: #64748b;
   --accent-strong: #0b4e68;
+  --border-soft: rgba(148, 163, 184, 0.24);
+  --shadow-soft: 0 28px 70px rgba(15, 23, 42, 0.14);
   --font-sans: "Segoe UI", "Aptos", "Trebuchet MS", sans-serif;
   --font-display: "Georgia", "Times New Roman", serif;
   --font-mono: "Consolas", "Courier New", monospace;
@@ -21,6 +26,22 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+:root[data-theme='dark'] {
+  --page-bg: #07111b;
+  --page-bg-deep: #111827;
+  --surface: #0f172a;
+  --surface-soft: rgba(15, 23, 42, 0.88);
+  --surface-strong: rgba(30, 41, 59, 0.92);
+  --text-main: #e2e8f0;
+  --text-strong: #f8fafc;
+  --text-soft: #94a3b8;
+  --text-muted: #64748b;
+  --accent-strong: #67e8f9;
+  --border-soft: rgba(100, 116, 139, 0.35);
+  --shadow-soft: 0 28px 70px rgba(2, 6, 23, 0.42);
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -32,6 +53,12 @@ html {
 body {
   margin: 0;
   min-width: 320px;
+  color: var(--text-main);
+  background:
+    radial-gradient(circle at top left, rgba(14, 165, 233, 0.14), transparent 30%),
+    radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.18), transparent 34%),
+    linear-gradient(135deg, var(--page-bg), var(--page-bg-deep));
+  transition: background 220ms ease, color 220ms ease;
 }
 
 body,

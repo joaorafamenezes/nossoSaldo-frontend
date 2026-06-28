@@ -2725,6 +2725,345 @@
   color: #991b1b;
 }
 
+.settings-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(18rem, 0.9fr);
+  gap: 1rem;
+  margin-top: 1.2rem;
+  align-items: start;
+}
+
+.settings-option-card,
+.settings-hint-card {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 1.25rem;
+  padding: 1.2rem;
+}
+
+.settings-option-card {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.settings-option-copy strong,
+.settings-hint-card h5 {
+  display: block;
+  margin-top: 0.55rem;
+  color: var(--text-strong);
+  font-size: 1.08rem;
+}
+
+.settings-option-copy p,
+.settings-hint-card p {
+  margin: 0.7rem 0 0;
+  color: var(--text-soft);
+  line-height: 1.65;
+}
+
+.settings-option-kicker {
+  display: inline-flex;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--accent-strong);
+}
+
+.theme-switcher {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem;
+}
+
+.theme-choice {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(248, 250, 252, 0.92);
+  border-radius: 1.15rem;
+  padding: 0.95rem;
+  text-align: left;
+  display: grid;
+  gap: 0.85rem;
+  cursor: pointer;
+  transition: transform 180ms ease, border-color 180ms ease, background 180ms ease, box-shadow 180ms ease;
+}
+
+.theme-choice:hover {
+  transform: translateY(-1px);
+  border-color: rgba(11, 78, 104, 0.32);
+}
+
+.theme-choice-active {
+  border-color: rgba(11, 78, 104, 0.46);
+  background: rgba(219, 234, 254, 0.9);
+  box-shadow: 0 18px 34px rgba(11, 78, 104, 0.12);
+}
+
+.theme-choice-preview {
+  display: block;
+  width: 100%;
+  height: 5.2rem;
+  border-radius: 0.95rem;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.theme-choice-preview-light {
+  background:
+    radial-gradient(circle at 18% 22%, rgba(245, 158, 11, 0.28), transparent 24%),
+    linear-gradient(145deg, #f8fafc, #dbeafe);
+}
+
+.theme-choice-preview-dark {
+  background:
+    radial-gradient(circle at 20% 22%, rgba(103, 232, 249, 0.18), transparent 24%),
+    linear-gradient(145deg, #0f172a, #111827);
+}
+
+.theme-choice-copy {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.theme-choice-copy strong {
+  color: var(--text-strong);
+  font-size: 1rem;
+}
+
+.theme-choice-copy small {
+  color: var(--text-soft);
+  line-height: 1.5;
+}
+
+:root[data-theme='dark'] .brand-logo-lockup,
+:root[data-theme='dark'] .feature-card,
+:root[data-theme='dark'] .app-footer,
+:root[data-theme='dark'] .login-card,
+:root[data-theme='dark'] .dashboard-card,
+:root[data-theme='dark'] .session-card,
+:root[data-theme='dark'] .dashboard-hero,
+:root[data-theme='dark'] .metric-card,
+:root[data-theme='dark'] .dashboard-panel-card,
+:root[data-theme='dark'] .dashboard-expenses,
+:root[data-theme='dark'] .radar-panel,
+:root[data-theme='dark'] .report-tab,
+:root[data-theme='dark'] .top-category-item,
+:root[data-theme='dark'] .who-spends-more-card,
+:root[data-theme='dark'] .who-spends-more-bar-card,
+:root[data-theme='dark'] .report-intro-card,
+:root[data-theme='dark'] .report-notes-grid article,
+:root[data-theme='dark'] .category-form-card,
+:root[data-theme='dark'] .category-list-card,
+:root[data-theme='dark'] .category-card,
+:root[data-theme='dark'] .joint-account-form-card,
+:root[data-theme='dark'] .joint-account-card,
+:root[data-theme='dark'] .joint-account-user,
+:root[data-theme='dark'] .credit-card-form-card,
+:root[data-theme='dark'] .credit-card-list-card,
+:root[data-theme='dark'] .credit-card-item,
+:root[data-theme='dark'] .invoice-card,
+:root[data-theme='dark'] .top-category-expand-button,
+:root[data-theme='dark'] .emoji-option,
+:root[data-theme='dark'] .settings-option-card,
+:root[data-theme='dark'] .settings-hint-card,
+:root[data-theme='dark'] .theme-choice,
+:root[data-theme='dark'] .share-toggle-field,
+:root[data-theme='dark'] .category-preview-card,
+:root[data-theme='dark'] .dashboard-empty-state {
+  background: var(--surface-soft);
+  border-color: var(--border-soft);
+  box-shadow: var(--shadow-soft);
+}
+
+:root[data-theme='dark'] .brand-panel,
+:root[data-theme='dark'] .login-panel,
+:root[data-theme='dark'] .dashboard-main {
+  color: var(--text-main);
+}
+
+:root[data-theme='dark'] .dashboard-sidebar-brand strong,
+:root[data-theme='dark'] .dashboard-sidebar-brand p,
+:root[data-theme='dark'] .dashboard-section-header h4,
+:root[data-theme='dark'] .dashboard-empty-state strong,
+:root[data-theme='dark'] .report-tab-title,
+:root[data-theme='dark'] .top-category-item strong,
+:root[data-theme='dark'] .top-category-value,
+:root[data-theme='dark'] .top-category-expense-value,
+:root[data-theme='dark'] .who-spends-more-card strong,
+:root[data-theme='dark'] .who-spends-more-value,
+:root[data-theme='dark'] .report-intro-card strong,
+:root[data-theme='dark'] .report-notes-grid strong,
+:root[data-theme='dark'] .category-list-header h5,
+:root[data-theme='dark'] .category-card h5,
+:root[data-theme='dark'] .joint-account-card-header h5,
+:root[data-theme='dark'] .joint-account-user strong,
+:root[data-theme='dark'] .credit-card-item h5,
+:root[data-theme='dark'] .settings-option-copy strong,
+:root[data-theme='dark'] .settings-hint-card h5 {
+  color: var(--text-strong);
+}
+
+:root[data-theme='dark'] .feature-card p,
+:root[data-theme='dark'] .login-card-header p,
+:root[data-theme='dark'] .dashboard-hero p,
+:root[data-theme='dark'] .metric-card p,
+:root[data-theme='dark'] .dashboard-empty-state p,
+:root[data-theme='dark'] .report-tab-description,
+:root[data-theme='dark'] .category-card p,
+:root[data-theme='dark'] .joint-account-user p,
+:root[data-theme='dark'] .joint-account-actions p,
+:root[data-theme='dark'] .joint-account-meta,
+:root[data-theme='dark'] .joint-account-user span,
+:root[data-theme='dark'] .credit-card-item p,
+:root[data-theme='dark'] .credit-card-shared-note,
+:root[data-theme='dark'] .top-category-rank,
+:root[data-theme='dark'] .top-category-expense-row span,
+:root[data-theme='dark'] .top-category-expense-empty,
+:root[data-theme='dark'] .who-spends-more-card p,
+:root[data-theme='dark'] .who-spends-more-bar-header span,
+:root[data-theme='dark'] .who-spends-more-legend,
+:root[data-theme='dark'] .report-intro-card p,
+:root[data-theme='dark'] .report-notes-grid p,
+:root[data-theme='dark'] .theme-choice-copy small,
+:root[data-theme='dark'] .settings-option-copy p,
+:root[data-theme='dark'] .settings-hint-card p,
+:root[data-theme='dark'] .share-toggle-field small {
+  color: var(--text-soft);
+}
+
+:root[data-theme='dark'] .field input,
+:root[data-theme='dark'] .field select,
+:root[data-theme='dark'] .field textarea {
+  background: rgba(15, 23, 42, 0.88);
+  border-color: rgba(100, 116, 139, 0.42);
+  color: var(--text-main);
+}
+
+:root[data-theme='dark'] .field input:disabled,
+:root[data-theme='dark'] .field-input-disabled {
+  background: rgba(30, 41, 59, 0.88);
+}
+
+:root[data-theme='dark'] .field span {
+  color: var(--text-strong);
+}
+
+:root[data-theme='dark'] .field input::placeholder,
+:root[data-theme='dark'] .field textarea::placeholder {
+  color: rgba(148, 163, 184, 0.88);
+}
+
+:root[data-theme='dark'] .secondary-button {
+  background: rgba(15, 23, 42, 0.88);
+  border-color: rgba(103, 232, 249, 0.18);
+  color: var(--accent-strong);
+}
+
+:root[data-theme='dark'] .secondary-button:hover {
+  background: rgba(30, 41, 59, 0.96);
+  border-color: rgba(103, 232, 249, 0.32);
+}
+
+:root[data-theme='dark'] .dashboard-sidebar {
+  background:
+    radial-gradient(circle at 16% 7%, rgba(103, 232, 249, 0.16), transparent 11%),
+    radial-gradient(circle at 88% 18%, rgba(14, 165, 233, 0.12), transparent 24%),
+    linear-gradient(180deg, #081420 0%, #0f172a 52%, #111827 100%);
+  border-color: rgba(103, 232, 249, 0.12);
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.48);
+}
+
+:root[data-theme='dark'] .metric-card-revenue {
+  background: rgba(12, 74, 110, 0.44);
+  border-color: rgba(59, 130, 246, 0.25);
+}
+
+:root[data-theme='dark'] .metric-card-expense {
+  background: rgba(127, 29, 29, 0.32);
+  border-color: rgba(248, 113, 113, 0.24);
+}
+
+:root[data-theme='dark'] .metric-card-balance {
+  background: rgba(15, 23, 42, 0.88);
+  border-color: rgba(100, 116, 139, 0.35);
+}
+
+:root[data-theme='dark'] .dashboard-empty-state {
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.08), transparent 28%),
+    rgba(15, 23, 42, 0.92);
+  border-color: rgba(103, 232, 249, 0.18);
+}
+
+:root[data-theme='dark'] .report-tab:hover,
+:root[data-theme='dark'] .top-category-expand-button:hover,
+:root[data-theme='dark'] .emoji-option:hover,
+:root[data-theme='dark'] .credit-card-item:hover {
+  background: rgba(30, 41, 59, 0.98);
+  box-shadow: 0 18px 34px rgba(2, 6, 23, 0.34);
+}
+
+:root[data-theme='dark'] .report-tab-active,
+:root[data-theme='dark'] .who-spends-more-card-leading {
+  background: linear-gradient(135deg, rgba(8, 145, 178, 0.22), rgba(15, 23, 42, 0.96));
+  border-color: rgba(103, 232, 249, 0.26);
+  box-shadow: 0 18px 34px rgba(8, 145, 178, 0.14);
+}
+
+:root[data-theme='dark'] .category-preview-icon,
+:root[data-theme='dark'] .category-card-icon,
+:root[data-theme='dark'] .top-category-expand-button,
+:root[data-theme='dark'] .session-card code {
+  background: rgba(30, 41, 59, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.24);
+  color: var(--text-strong);
+}
+
+:root[data-theme='dark'] .category-counter,
+:root[data-theme='dark'] .credit-card-item-details span,
+:root[data-theme='dark'] .invoice-current-pill {
+  background: rgba(8, 145, 178, 0.14);
+  color: #9be7f5;
+}
+
+:root[data-theme='dark'] .top-category-bar-track,
+:root[data-theme='dark'] .who-spends-more-bar-track,
+:root[data-theme='dark'] .monthly-report-bar-track {
+  background: rgba(51, 65, 85, 0.72);
+}
+
+:root[data-theme='dark'] .report-period-pill {
+  color: #99f6e4;
+  background: rgba(13, 148, 136, 0.16);
+  border-color: rgba(45, 212, 191, 0.18);
+}
+
+:root[data-theme='dark'] .report-insight-badge {
+  color: #fecaca;
+  background: rgba(127, 29, 29, 0.42);
+  border-color: rgba(248, 113, 113, 0.22);
+}
+
+:root[data-theme='dark'] .report-insight-badge small {
+  color: #fca5a5;
+}
+
+:root[data-theme='dark'] .success-inline-banner {
+  background: rgba(6, 95, 70, 0.24);
+  border-color: rgba(45, 212, 191, 0.18);
+  color: #a7f3d0;
+}
+
+:root[data-theme='dark'] .emoji-option-active,
+:root[data-theme='dark'] .theme-choice-active {
+  background: rgba(8, 145, 178, 0.18);
+  border-color: rgba(103, 232, 249, 0.36);
+  box-shadow: 0 18px 34px rgba(8, 145, 178, 0.14);
+}
+
+:root[data-theme='dark'] .theme-choice-active {
+  transform: translateY(-1px);
+}
+
 @keyframes rise-in {
   from {
     opacity: 0;
@@ -2847,6 +3186,11 @@
   }
 
   .categories-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-grid,
+  .theme-switcher {
     grid-template-columns: 1fr;
   }
 

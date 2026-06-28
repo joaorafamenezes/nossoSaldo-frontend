@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000'
 
 async function parseResponse(response) {
   const body = await response.json().catch(() => null)

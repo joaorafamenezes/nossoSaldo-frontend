@@ -23,7 +23,7 @@ npm run preview  # serve o build localmente
 Configure a URL da API quando necessario:
 
 ```env
-VITE_API_URL="http://localhost:3000"
+VITE_API_URL="http://localhost:10000"
 ```
 
 Quando `VITE_API_URL` nao e informado, o frontend usa a configuracao padrao definida em `src/services/api.js`.

@@ -35,6 +35,7 @@ import {
 } from './services/api'
 
 const isDevelopmentEnvironment = import.meta.env.DEV
+const THEME_STORAGE_KEY = 'nossosaldo.theme'
 
 const initialForm = {
   email: '',
@@ -644,6 +645,7 @@ function App() {
   const [search, setSearch] = useState(() => window.location.search)
   const [dashboardSection, setDashboardSection] = useState('gastos')
   const [reportSection, setReportSection] = useState('evolucao-mensal')
+  const [themeMode, setThemeMode] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) ?? 'light')
   const reportMenuItems = [
     {
       id: 'evolucao-mensal',
@@ -696,6 +698,12 @@ function App() {
       window.removeEventListener('popstate', syncRoute)
     }
   }, [])
+
+  useEffect(() => {
+    const normalizedTheme = themeMode === 'dark' ? 'dark' : 'light'
+    document.documentElement.dataset.theme = normalizedTheme
+    localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme)
+  }, [themeMode])
 
   useEffect(() => {
     if (!token) {
@@ -3262,6 +3270,17 @@ function App() {
                       <span className="dashboard-nav-icon">☰</span>
                       <span>Relatorios</span>
                     </button>
+                    <button
+                      type="button"
+                      className={`dashboard-nav-item ${dashboardSection === 'configuracoes' ? 'dashboard-nav-item-active' : ''}`}
+                      onClick={() => {
+                        setDashboardSection('configuracoes')
+                        navigateTo('/dashboard')
+                      }}
+                    >
+                      <span className="dashboard-nav-icon">âš™</span>
+                      <span>Configuracoes</span>
+                    </button>
                     {dashboardSection === 'relatorios' ? (
                       <div className="dashboard-subnav">
                         <div className="dashboard-subnav-header">
@@ -4609,6 +4628,70 @@ function App() {
                           A estrutura do submenu ja esta pronta para receber as versoes reais de
                           comparativo mensal, top categorias e comportamento.
                         </p>
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {dashboardSection === 'configuracoes' ? (
+                    <section className="dashboard-expenses settings-section">
+                      <div className="dashboard-section-header">
+                        <div>
+                          <span className="feature-label">Preferencias</span>
+                          <h4>Configuracoes da experiencia</h4>
+                          <p>
+                            Ajuste o visual do painel para o estilo que fizer mais sentido no seu dia a dia.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="settings-grid">
+                        <article className="settings-option-card">
+                          <div className="settings-option-copy">
+                            <span className="settings-option-kicker">Tema do painel</span>
+                            <strong>{themeMode === 'dark' ? 'Modo dark ativo' : 'Modo claro ativo'}</strong>
+                            <p>
+                              Troque a atmosfera do sistema sem perder contraste, leitura e identidade visual.
+                            </p>
+                          </div>
+
+                          <div className="theme-switcher" role="radiogroup" aria-label="Selecao de tema do painel">
+                            <button
+                              type="button"
+                              role="radio"
+                              aria-checked={themeMode !== 'dark'}
+                              className={`theme-choice ${themeMode !== 'dark' ? 'theme-choice-active' : ''}`}
+                              onClick={() => setThemeMode('light')}
+                            >
+                              <span className="theme-choice-preview theme-choice-preview-light" aria-hidden="true" />
+                              <span className="theme-choice-copy">
+                                <strong>Claro</strong>
+                                <small>Visual leve e luminoso.</small>
+                              </span>
+                            </button>
+
+                            <button
+                              type="button"
+                              role="radio"
+                              aria-checked={themeMode === 'dark'}
+                              className={`theme-choice ${themeMode === 'dark' ? 'theme-choice-active' : ''}`}
+                              onClick={() => setThemeMode('dark')}
+                            >
+                              <span className="theme-choice-preview theme-choice-preview-dark" aria-hidden="true" />
+                              <span className="theme-choice-copy">
+                                <strong>Dark</strong>
+                                <small>Mais conforto visual para uso prolongado.</small>
+                              </span>
+                            </button>
+                          </div>
+                        </article>
+
+                        <article className="settings-hint-card">
+                          <span className="feature-label">Em breve</span>
+                          <h5>O que mais pode entrar aqui</h5>
+                          <p>
+                            Esta nova area pode receber notificacoes, preferencias dos relatorios e ajustes do diagnostico financeiro.
+                          </p>
+                        </article>
                       </div>
                     </section>
                   ) : null}
