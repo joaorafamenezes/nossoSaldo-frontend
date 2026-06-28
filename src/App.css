@@ -2850,6 +2850,12 @@
 :root[data-theme='dark'] .radar-tip-card,
 :root[data-theme='dark'] .radar-detail-card,
 :root[data-theme='dark'] .radar-preset-button,
+:root[data-theme='dark'] .expense-group,
+:root[data-theme='dark'] .expense-group-header,
+:root[data-theme='dark'] .expense-card,
+:root[data-theme='dark'] .expense-card-meta span,
+:root[data-theme='dark'] .installment-row,
+:root[data-theme='dark'] .installment-toggle-button,
 :root[data-theme='dark'] .report-tab,
 :root[data-theme='dark'] .top-category-item,
 :root[data-theme='dark'] .who-spends-more-card,
@@ -2888,6 +2894,11 @@
 :root[data-theme='dark'] .dashboard-sidebar-brand strong,
 :root[data-theme='dark'] .dashboard-sidebar-brand p,
 :root[data-theme='dark'] .dashboard-section-header h4,
+:root[data-theme='dark'] .expense-group-heading strong,
+:root[data-theme='dark'] .expense-group-total,
+:root[data-theme='dark'] .expense-card-main h5,
+:root[data-theme='dark'] .expense-card-main strong,
+:root[data-theme='dark'] .installment-number,
 :root[data-theme='dark'] .radar-highlight-card strong,
 :root[data-theme='dark'] .radar-item-header strong,
 :root[data-theme='dark'] .radar-tip-card strong,
@@ -2917,6 +2928,12 @@
 :root[data-theme='dark'] .radar-item p,
 :root[data-theme='dark'] .radar-tip-card p,
 :root[data-theme='dark'] .radar-detail-card p,
+:root[data-theme='dark'] .expense-group-heading p,
+:root[data-theme='dark'] .expense-card-subtitle,
+:root[data-theme='dark'] .expense-card-main p,
+:root[data-theme='dark'] .expense-card-meta,
+:root[data-theme='dark'] .expense-card-status-text,
+:root[data-theme='dark'] .installment-row,
 :root[data-theme='dark'] .dashboard-hero p,
 :root[data-theme='dark'] .metric-card p,
 :root[data-theme='dark'] .dashboard-empty-state p,
@@ -3091,10 +3108,92 @@
   border-color: rgba(103, 232, 249, 0.18);
 }
 
+:root[data-theme='dark'] .expense-group {
+  background: rgba(15, 23, 42, 0.9);
+  border-color: rgba(100, 116, 139, 0.3);
+  box-shadow: 0 18px 38px rgba(2, 6, 23, 0.28);
+}
+
+:root[data-theme='dark'] .expense-group-header {
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.08), transparent 32%),
+    rgba(30, 41, 59, 0.84);
+  border-bottom: 1px solid rgba(100, 116, 139, 0.18);
+}
+
+:root[data-theme='dark'] .expense-group-icon,
+:root[data-theme='dark'] .installment-toggle-button {
+  background: rgba(30, 41, 59, 0.92);
+  border-color: rgba(100, 116, 139, 0.34);
+  color: var(--text-strong);
+  box-shadow: inset 0 0 0 1px rgba(100, 116, 139, 0.16);
+}
+
+:root[data-theme='dark'] .expense-group-toggle {
+  color: var(--text-soft);
+}
+
+:root[data-theme='dark'] .expense-card {
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.05), transparent 28%),
+    rgba(15, 23, 42, 0.94);
+  border-color: rgba(100, 116, 139, 0.28);
+  box-shadow: 0 16px 34px rgba(2, 6, 23, 0.24);
+}
+
+:root[data-theme='dark'] .expense-card-clickable:hover {
+  box-shadow: 0 20px 38px rgba(2, 6, 23, 0.34);
+  border-color: rgba(103, 232, 249, 0.22);
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.08), transparent 28%),
+    rgba(30, 41, 59, 0.96);
+}
+
+:root[data-theme='dark'] .expense-card-meta span {
+  background: rgba(30, 41, 59, 0.86);
+  border-color: rgba(100, 116, 139, 0.22);
+  color: var(--text-soft);
+}
+
+:root[data-theme='dark'] .installment-list {
+  border-top-color: rgba(100, 116, 139, 0.34);
+}
+
+:root[data-theme='dark'] .installment-row {
+  background: rgba(30, 41, 59, 0.72);
+  border-color: rgba(100, 116, 139, 0.18);
+}
+
+:root[data-theme='dark'] .installment-row:hover:not(:disabled) {
+  background: rgba(51, 65, 85, 0.78);
+  border-color: rgba(103, 232, 249, 0.18);
+}
+
+:root[data-theme='dark'] .installment-row-paid {
+  background: rgba(6, 95, 70, 0.22);
+  border-color: rgba(45, 212, 191, 0.18);
+  color: #a7f3d0;
+}
+
+:root[data-theme='dark'] .installment-status {
+  background: rgba(15, 23, 42, 0.88);
+  color: var(--text-strong);
+}
+
+:root[data-theme='dark'] .installment-status-paid {
+  background: rgba(6, 95, 70, 0.28);
+  color: #a7f3d0;
+}
+
+:root[data-theme='dark'] .success-inline-banner {
+  background: linear-gradient(135deg, rgba(6, 95, 70, 0.22), rgba(15, 23, 42, 0.92));
+}
+
 :root[data-theme='dark'] .report-tab:hover,
 :root[data-theme='dark'] .top-category-expand-button:hover,
 :root[data-theme='dark'] .emoji-option:hover,
-:root[data-theme='dark'] .credit-card-item:hover {
+:root[data-theme='dark'] .credit-card-item:hover,
+:root[data-theme='dark'] .installment-toggle-button:hover {
   background: rgba(30, 41, 59, 0.98);
   box-shadow: 0 18px 34px rgba(2, 6, 23, 0.34);
 }
