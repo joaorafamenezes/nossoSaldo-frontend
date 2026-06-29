@@ -3252,17 +3252,6 @@ function App() {
                     </button>
                     <button
                       type="button"
-                      className={`dashboard-nav-item ${dashboardSection === 'categorias' ? 'dashboard-nav-item-active' : ''}`}
-                      onClick={() => {
-                        setDashboardSection('categorias')
-                        navigateTo('/dashboard')
-                      }}
-                    >
-                      <span className="dashboard-nav-icon">◆</span>
-                      <span>Categorias</span>
-                    </button>
-                    <button
-                      type="button"
                       className={`dashboard-nav-item ${dashboardSection === 'cartoes' || dashboardSection === 'faturas' ? 'dashboard-nav-item-active' : ''}`}
                       onClick={() => {
                         setDashboardSection('cartoes')
@@ -3331,6 +3320,17 @@ function App() {
                     >
                       <span className="dashboard-nav-icon">☰</span>
                       <span>Relatorios</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`dashboard-nav-item ${dashboardSection === 'categorias' ? 'dashboard-nav-item-active' : ''}`}
+                      onClick={() => {
+                        setDashboardSection('categorias')
+                        navigateTo('/dashboard')
+                      }}
+                    >
+                      <span className="dashboard-nav-icon">◆</span>
+                      <span>Categorias</span>
                     </button>
                     <button
                       type="button"
