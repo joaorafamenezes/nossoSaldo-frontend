@@ -563,6 +563,73 @@ function getExpensePeriodAmount(expense, dateFrom, dateTo) {
   return Number(expense.valor ?? 0)
 }
 
+function isInvoiceOpen(status) {
+  return !['paga', 'cancelada'].includes(String(status ?? '').toLowerCase())
+}
+
+function buildCreditCardUsageMap(expenses) {
+  const usageByCard = new Map()
+  const recurringSeriesByCard = new Map()
+
+  expenses.forEach((expense) => {
+    if (!expense?.cartaoCreditoId || expense.tipo !== 'despesa' || expense.status === 'cancelado') {
+      return
+    }
+
+    if (expense.origemLancamento === 'parcelado') {
+      if (!Array.isArray(expense.lancamentosBase)) {
+        return
+      }
+
+      const totalInstallments = expense.lancamentosBase.reduce((total, installment) => {
+        if (!installment?.faturaCartaoId || !isInvoiceOpen(installment.faturaCartaoStatus)) {
+          return total
+        }
+
+        return total + Number(installment.valorParcela ?? 0)
+      }, 0)
+
+      if (totalInstallments <= 0) {
+        return
+      }
+
+      const currentUsage = usageByCard.get(expense.cartaoCreditoId) ?? 0
+      usageByCard.set(expense.cartaoCreditoId, currentUsage + totalInstallments)
+      return
+    }
+
+    if (!expense.faturaCartaoId || !isInvoiceOpen(expense.faturaCartaoStatus)) {
+      return
+    }
+
+    if (expense.origemLancamento === 'recorrente') {
+      const seriesKey = expense.recorrenciaPaiId || expense.id
+      const cardSeriesKey = `${expense.cartaoCreditoId}:${seriesKey}`
+      const existingSeriesExpense = recurringSeriesByCard.get(cardSeriesKey)
+      const expenseDueTime = expense.dataVencimento ? new Date(expense.dataVencimento).getTime() : Number.MAX_SAFE_INTEGER
+      const existingDueTime = existingSeriesExpense?.dataVencimento
+        ? new Date(existingSeriesExpense.dataVencimento).getTime()
+        : Number.MAX_SAFE_INTEGER
+
+      if (!existingSeriesExpense || expenseDueTime < existingDueTime) {
+        recurringSeriesByCard.set(cardSeriesKey, expense)
+      }
+
+      return
+    }
+
+    const currentUsage = usageByCard.get(expense.cartaoCreditoId) ?? 0
+    usageByCard.set(expense.cartaoCreditoId, currentUsage + Number(expense.valor ?? 0))
+  })
+
+  recurringSeriesByCard.forEach((expense) => {
+    const currentUsage = usageByCard.get(expense.cartaoCreditoId) ?? 0
+    usageByCard.set(expense.cartaoCreditoId, currentUsage + Number(expense.valor ?? 0))
+  })
+
+  return usageByCard
+}
+
 function App() {
   const [form, setForm] = useState(initialForm)
   const [registerForm, setRegisterForm] = useState(initialRegisterForm)
@@ -1765,11 +1832,7 @@ function App() {
       return null
     }
 
-    const cardInvoices = await getCreditCardInvoices(token, selectedCard.id).catch(() => [])
-    const invoices = Array.isArray(cardInvoices) ? cardInvoices : []
-    const openBalance = invoices
-      .filter((invoice) => !['paga', 'cancelada'].includes(invoice.status))
-      .reduce((total, invoice) => total + Number(invoice.valorTotal ?? 0), 0)
+    const openBalance = Number(buildCreditCardUsageMap(expenses).get(selectedCard.id) ?? 0)
     const projectedExpenseValue = Number(payload.valor ?? 0)
     const projectedBalance = openBalance + projectedExpenseValue
     const currentPercent = (openBalance / limit) * 100
@@ -1865,15 +1928,7 @@ function App() {
       .map((invoice) => getInvoiceDueMonth(invoice.dataVencimento))
       .filter(Boolean),
   )).sort((firstMonth, secondMonth) => secondMonth.localeCompare(firstMonth))
-  const creditCardUsageById = creditCardInvoices.reduce((usageMap, invoice) => {
-    if (!invoice?.cartaoCreditoId || ['paga', 'cancelada'].includes(invoice.status)) {
-      return usageMap
-    }
-
-    const currentUsage = usageMap.get(invoice.cartaoCreditoId) ?? 0
-    usageMap.set(invoice.cartaoCreditoId, currentUsage + Number(invoice.valorTotal ?? 0))
-    return usageMap
-  }, new Map())
+  const creditCardUsageById = buildCreditCardUsageMap(expenses)
   const invoiceItemsById = expenses.reduce((groups, expense) => {
     const ownerLabel = expense.responsavelId === profile?.id
       ? 'Responsavel: voce'
@@ -1934,6 +1989,13 @@ function App() {
       ? firstTime - secondTime
       : secondTime - firstTime
   })
+  const sortedCategories = categories.slice().sort((firstCategory, secondCategory) => (
+    String(firstCategory?.descricao ?? '').localeCompare(
+      String(secondCategory?.descricao ?? ''),
+      'pt-BR',
+      { sensitivity: 'base' },
+    )
+  ))
   const monthlyReportValues = monthlyReportItems.map((item) => Number(item.total ?? item.total_gasto ?? 0))
   const monthlyReportMax = monthlyReportValues.length > 0 ? Math.max(...monthlyReportValues) : 0
   const monthlyReportTotal = monthlyReportValues.reduce((sum, item) => sum + item, 0)
@@ -3643,7 +3705,7 @@ function App() {
                                 required={isExpenseCreateRoute}
                               >
                                 <option value="">Selecione uma categoria</option>
-                                {categories.map((category) => (
+                                {sortedCategories.map((category) => (
                                   <option key={category.id} value={category.id}>
                                     {`${getCategoryDisplayIcon(category)} ${category.descricao}`}
                                   </option>
