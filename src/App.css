@@ -543,34 +543,6 @@
   align-content: start;
 }
 
-.dashboard-nav > :nth-child(1) {
-  order: 1;
-}
-
-.dashboard-nav > :nth-child(3) {
-  order: 2;
-}
-
-.dashboard-nav > .dashboard-subnav-compact {
-  order: 3;
-}
-
-.dashboard-nav > :nth-child(6) {
-  order: 4;
-}
-
-.dashboard-nav > :nth-child(7) {
-  order: 5;
-}
-
-.dashboard-nav > .dashboard-subnav:not(.dashboard-subnav-compact) {
-  order: 6;
-}
-
-.dashboard-nav > :nth-child(5) {
-  order: 7;
-}
-
 .dashboard-nav > :nth-child(2) {
   order: 8;
 }
