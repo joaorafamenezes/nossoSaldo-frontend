@@ -3247,7 +3247,7 @@ function App() {
                         navigateTo('/dashboard')
                       }}
                     >
-                      <span className="dashboard-nav-icon">⌂</span>
+                      <span className="dashboard-nav-icon">�</span>
                       <span>Lista de gastos</span>
                     </button>
                     <button
@@ -3258,7 +3258,7 @@ function App() {
                         navigateTo('/dashboard')
                       }}
                     >
-                      <span className="dashboard-nav-icon">▰</span>
+                      <span className="dashboard-nav-icon">?</span>
                       <span>Cartoes de credito</span>
                     </button>
                     {dashboardSection === 'cartoes' || dashboardSection === 'faturas' ? (
@@ -3295,7 +3295,7 @@ function App() {
                         navigateTo('/dashboard')
                       }}
                     >
-                      <span className="dashboard-nav-icon">●</span>
+                      <span className="dashboard-nav-icon">?</span>
                       <span>Conta Conjunta</span>
                     </button>
                     <button
@@ -3318,7 +3318,7 @@ function App() {
                         navigateTo('/dashboard')
                       }}
                     >
-                      <span className="dashboard-nav-icon">☰</span>
+                      <span className="dashboard-nav-icon">?</span>
                       <span>Relatorios</span>
                     </button>
                     <button
@@ -3329,7 +3329,7 @@ function App() {
                         navigateTo('/dashboard')
                       }}
                     >
-                      <span className="dashboard-nav-icon">◆</span>
+                      <span className="dashboard-nav-icon">?</span>
                       <span>Categorias</span>
                     </button>
                     <button
@@ -3340,7 +3340,7 @@ function App() {
                         navigateTo('/dashboard')
                       }}
                     >
-                      <span className="dashboard-nav-icon">âš™</span>
+                      <span className="dashboard-nav-icon">?</span>
                       <span>Configuracoes</span>
                     </button>
                     {dashboardSection === 'relatorios' ? (
