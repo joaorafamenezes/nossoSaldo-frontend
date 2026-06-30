@@ -2993,6 +2993,106 @@
   border-color: rgba(103, 232, 249, 0.32);
 }
 
+:root[data-theme='dark'] .modal-overlay {
+  background: rgba(2, 6, 23, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+:root[data-theme='dark'] .confirm-modal {
+  background:
+    radial-gradient(circle at top right, rgba(103, 232, 249, 0.08), transparent 24%),
+    linear-gradient(145deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.96));
+  border-color: rgba(103, 232, 249, 0.18);
+  box-shadow: 0 28px 70px rgba(2, 6, 23, 0.58);
+}
+
+:root[data-theme='dark'] .confirm-modal .feature-label {
+  color: #67e8f9;
+  background: rgba(34, 211, 238, 0.1);
+}
+
+:root[data-theme='dark'] .confirm-modal h3 {
+  color: var(--text-strong);
+}
+
+:root[data-theme='dark'] .confirm-modal p {
+  color: var(--text-soft);
+}
+
+:root[data-theme='dark'] .confirm-modal p strong {
+  color: var(--text-strong);
+}
+
+:root[data-theme='dark'] .confirm-modal .secondary-button {
+  background: rgba(15, 23, 42, 0.92);
+  border-color: rgba(103, 232, 249, 0.22);
+  color: var(--text-main);
+}
+
+:root[data-theme='dark'] .confirm-modal .secondary-button:hover {
+  background: rgba(30, 41, 59, 0.98);
+  border-color: rgba(103, 232, 249, 0.36);
+  color: #ffffff;
+}
+
+:root[data-theme='dark'] .confirm-modal .primary-button {
+  box-shadow: 0 16px 30px rgba(8, 145, 178, 0.24);
+}
+
+:root[data-theme='dark'] .confirm-modal .danger-button {
+  box-shadow: 0 16px 30px rgba(185, 28, 28, 0.24);
+}
+
+:root[data-theme='dark'] .invoice-summary-item {
+  background: rgba(248, 250, 252, 0.08);
+  border-color: rgba(100, 116, 139, 0.32);
+}
+
+:root[data-theme='dark'] .invoice-summary-item span {
+  color: rgba(148, 163, 184, 0.9);
+}
+
+:root[data-theme='dark'] .invoice-summary-item strong,
+:root[data-theme='dark'] .invoice-total,
+:root[data-theme='dark'] .invoice-card h5 {
+  color: var(--text-strong);
+}
+
+:root[data-theme='dark'] .invoice-items-toggle {
+  background: rgba(15, 23, 42, 0.82);
+  border-color: rgba(100, 116, 139, 0.32);
+  color: var(--text-main);
+}
+
+:root[data-theme='dark'] .invoice-items-toggle:hover:not(:disabled) {
+  background: rgba(30, 41, 59, 0.96);
+  border-color: rgba(103, 232, 249, 0.22);
+}
+
+:root[data-theme='dark'] .invoice-items-toggle strong {
+  background: rgba(34, 211, 238, 0.14);
+  color: #67e8f9;
+}
+
+:root[data-theme='dark'] .invoice-items-panel {
+  border-top-color: rgba(100, 116, 139, 0.22);
+}
+
+:root[data-theme='dark'] .invoice-item-row {
+  background: rgba(248, 250, 252, 0.05);
+  border-color: rgba(100, 116, 139, 0.24);
+}
+
+:root[data-theme='dark'] .invoice-item-row strong {
+  color: var(--text-strong);
+}
+
+:root[data-theme='dark'] .invoice-item-row p,
+:root[data-theme='dark'] .invoice-item-row small,
+:root[data-theme='dark'] .invoice-items-empty {
+  color: var(--text-soft);
+}
+
 :root[data-theme='dark'] .dashboard-sidebar {
   background:
     radial-gradient(circle at 16% 7%, rgba(103, 232, 249, 0.16), transparent 11%),
