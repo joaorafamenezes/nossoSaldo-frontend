@@ -149,6 +149,39 @@ function getLastThirtyDaysRange() {
   }
 }
 
+function shiftMonthDateRange(range, monthOffset) {
+  const referenceDate = range?.dateFrom ? new Date(`${range.dateFrom}T00:00:00`) : new Date()
+
+  if (Number.isNaN(referenceDate.getTime())) {
+    return getCurrentMonthDateRange()
+  }
+
+  const targetYear = referenceDate.getFullYear()
+  const targetMonth = referenceDate.getMonth() + monthOffset
+  const firstDay = new Date(targetYear, targetMonth, 1)
+  const lastDay = new Date(targetYear, targetMonth + 1, 0)
+
+  return {
+    dateFrom: firstDay.toISOString().slice(0, 10),
+    dateTo: lastDay.toISOString().slice(0, 10),
+  }
+}
+
+function formatMonthYearLabel(dateValue) {
+  if (!dateValue) {
+    return 'Periodo personalizado'
+  }
+
+  const parsedDate = new Date(`${dateValue}T00:00:00`)
+
+  if (Number.isNaN(parsedDate.getTime())) {
+    return 'Periodo personalizado'
+  }
+
+  const label = new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(parsedDate)
+  return label.charAt(0).toUpperCase() + label.slice(1)
+}
+
 function getDefaultMonthlyReportRange() {
   const now = new Date()
   const firstMonth = new Date(now.getFullYear(), now.getMonth() - 5, 1)
@@ -1391,6 +1424,20 @@ function App() {
     }))
   }
 
+
+  const handleExpenseMonthNavigation = (monthOffset) => {
+    setExpenseFilters((current) => ({
+      ...current,
+      ...shiftMonthDateRange(current, monthOffset),
+    }))
+  }
+
+  const handleResetExpenseMonthNavigation = () => {
+    setExpenseFilters((current) => ({
+      ...current,
+      ...getCurrentMonthDateRange(),
+    }))
+  }
   const handleInsightsFilterChange = ({ target }) => {
     const { name, value } = target
     setInsightsFilters((current) => ({
@@ -2017,6 +2064,8 @@ function App() {
       - Number(firstReportMonth.total ?? firstReportMonth.total_gasto ?? 0))
       / Math.max(Number(firstReportMonth.total ?? firstReportMonth.total_gasto ?? 0), 1)) * 100
     : 0
+  const expenseFilterMonthLabel = formatMonthYearLabel(expenseFilters.dateFrom)
+
   const monthlyReportPeriodLabel = monthlyReportRange.dateFrom && monthlyReportRange.dateTo
     ? `${new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric' }).format(new Date(`${monthlyReportRange.dateFrom}T00:00:00`))} - ${new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric' }).format(new Date(`${monthlyReportRange.dateTo}T00:00:00`))}`
     : 'Periodo nao informado'
@@ -3782,15 +3831,49 @@ function App() {
                     </section>
                   ) : dashboardSection === 'gastos' ? (
                     <section className="dashboard-expenses">
-                      <div className="dashboard-section-header">
-                        <div>
+                      <div className="expense-topbar">
+                        <div className="expense-topbar-title">
                           <span className="feature-label">Conteudo inicial</span>
                           <h4>Lista de gastos</h4>
                         </div>
-                        <button type="button" className="primary-button" onClick={navigateToExpenseCreate}>
+                        <div className="expense-period-nav">
+                          <span className="feature-label">Periodo em foco</span>
+                          <div className="expense-period-nav-toolbar">
+                            <button
+                              type="button"
+                              className="secondary-button expense-period-nav-icon-button"
+                              onClick={() => handleExpenseMonthNavigation(-1)}
+                              aria-label="Ir para o mes anterior"
+                            >
+                              {'\u2039'}
+                            </button>
+                            <strong className="expense-period-nav-label">{expenseFilterMonthLabel}</strong>
+                            <button
+                              type="button"
+                              className="secondary-button expense-period-nav-icon-button"
+                              onClick={() => handleExpenseMonthNavigation(1)}
+                              aria-label="Ir para o proximo mes"
+                            >
+                              {'\u203A'}
+                            </button>
+                            <button
+                              type="button"
+                              className="secondary-button expense-period-nav-today-button"
+                              onClick={handleResetExpenseMonthNavigation}
+                            >
+                              Atual
+                            </button>
+                          </div>
+                        </div>
+                        <button type="button" className="primary-button expense-period-nav-create-button" onClick={navigateToExpenseCreate}>
                           Novo Registro
                         </button>
                       </div>
+
+
+
+
+
 
                       <div className="expense-filters">
                         <label className="field">
