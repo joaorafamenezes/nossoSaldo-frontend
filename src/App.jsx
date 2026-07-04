@@ -23,6 +23,7 @@ import {
   login,
   payCreditCardInvoice,
   payInstallment,
+  reopenInstallment,
   payExpense,
   reopenExpense,
   reopenCreditCardInvoice,
@@ -596,6 +597,29 @@ function getExpensePeriodAmount(expense, dateFrom, dateTo) {
   return Number(expense.valor ?? 0)
 }
 
+function getExpenseInstallmentHighlightAmount(expense) {
+  if (expense.origemLancamento !== 'parcelado') {
+    return Number(expense.valor ?? 0)
+  }
+
+  if (Array.isArray(expense.lancamentosBase) && expense.lancamentosBase.length > 0) {
+    const firstInstallment = expense.lancamentosBase.find((installment) => Number(installment.valorParcela ?? 0) > 0)
+
+    if (firstInstallment) {
+      return Number(firstInstallment.valorParcela ?? 0)
+    }
+  }
+
+  const totalAmount = Number(expense.valor ?? 0)
+  const totalInstallments = Number(expense.numeroParcelas ?? 0)
+
+  if (totalAmount > 0 && totalInstallments > 0) {
+    return totalAmount / totalInstallments
+  }
+
+  return totalAmount
+}
+
 function isInvoiceOpen(status) {
   return !['paga', 'cancelada'].includes(String(status ?? '').toLowerCase())
 }
@@ -700,6 +724,7 @@ function App() {
   const [isReopeningExpense, setIsReopeningExpense] = useState(false)
   const [isPayingExpense, setIsPayingExpense] = useState(false)
   const [isPayingInstallment, setIsPayingInstallment] = useState(false)
+  const [isReopeningInstallment, setIsReopeningInstallment] = useState(false)
   const [isDeletingExpense, setIsDeletingExpense] = useState(false)
   const [isUnlinkingJointAccount, setIsUnlinkingJointAccount] = useState(false)
   const [isLoadingExpenseDetails, setIsLoadingExpenseDetails] = useState(false)
@@ -1938,6 +1963,17 @@ function App() {
     }
   }
 
+  const installmentCount = expenseForm.origemLancamento === 'parcelado'
+    ? Number(expenseForm.numeroParcelas)
+    : 1
+  const installmentValue = parseCurrencyInput(expenseForm.valor)
+  const installmentTotalPreview = expenseForm.origemLancamento === 'parcelado'
+    && Number.isInteger(installmentCount)
+    && installmentCount > 1
+    && installmentValue > 0
+    ? Math.round(installmentValue * installmentCount * 100) / 100
+    : null
+
   const filteredExpenses = expenses.filter((expense) => {
     const effectiveStatus = getEffectiveExpenseStatus(expense)
     const matchesStatus =
@@ -2588,16 +2624,16 @@ function App() {
     setInvoiceModalMode(null)
   }
 
-  const openPayInstallmentModal = (expense, installment) => {
-    if (installment.status === 'pago') {
-      return
-    }
-
-    setSelectedInstallment({ expense, installment })
+  const openInstallmentModal = (expense, installment) => {
+    setSelectedInstallment({
+      expense,
+      installment,
+      mode: installment.status === 'pago' ? 'reopen' : 'pay',
+    })
   }
 
   const closePayInstallmentModal = () => {
-    if (isPayingInstallment) {
+    if (isPayingInstallment || isReopeningInstallment) {
       return
     }
 
@@ -2732,6 +2768,49 @@ function App() {
       })
     } finally {
       setIsPayingInstallment(false)
+    }
+  }
+
+  const handleReopenInstallment = async () => {
+    if (!selectedInstallment || !token) {
+      return
+    }
+
+    setIsReopeningInstallment(true)
+    setStatus({
+      type: 'loading',
+      message: `Reabrindo a parcela ${selectedInstallment.installment.numeroParcela}...`,
+    })
+
+    try {
+      const reopenedInstallment = await reopenInstallment(token, selectedInstallment.installment.id)
+
+      setExpenses((current) => current.map((expense) => {
+        if (expense.id !== selectedInstallment.expense.id) {
+          return expense
+        }
+
+        return {
+          ...expense,
+          lancamentosBase: Array.isArray(expense.lancamentosBase)
+            ? expense.lancamentosBase.map((installment) => (
+              installment.id === reopenedInstallment.id ? reopenedInstallment : installment
+            ))
+            : expense.lancamentosBase,
+        }
+      }))
+      setStatus({
+        type: 'success',
+        message: `Parcela ${reopenedInstallment.numeroParcela} reaberta com sucesso.`,
+      })
+      setSelectedInstallment(null)
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Nao foi possivel reabrir a parcela.',
+      })
+    } finally {
+      setIsReopeningInstallment(false)
     }
   }
 
@@ -2998,6 +3077,10 @@ function App() {
       }
     }
 
+    const inputValue = parseCurrencyInput(expenseForm.valor)
+    const normalizedValue = expenseForm.origemLancamento === 'parcelado'
+      ? Math.round(inputValue * Number(expenseForm.numeroParcelas) * 100) / 100
+      : inputValue
     const competenceMonth = getCompetenceMonthFromDueDate(expenseForm.dataVencimento) || expenseForm.competencia
     const payload = {
       descricao: expenseForm.descricao,
@@ -3006,7 +3089,7 @@ function App() {
       origemLancamento: expenseForm.origemLancamento,
       numeroParcelas: expenseForm.origemLancamento === 'parcelado' ? Number(expenseForm.numeroParcelas) : 1,
       naoCompartilhar: jointAccounts.length > 0 ? expenseForm.naoCompartilhar : false,
-      valor: parseCurrencyInput(expenseForm.valor),
+      valor: normalizedValue,
       competencia: normalizeCompetenceForPayload(competenceMonth),
       dataVencimento: expenseForm.dataVencimento || null,
       dataFimRecorrencia: expenseForm.origemLancamento === 'recorrente'
@@ -3657,7 +3740,11 @@ function App() {
                             </label>
 
                             <label className="field">
-                              <span>Valor</span>
+                              <span>
+                                {isExpenseCreateRoute && expenseForm.origemLancamento === 'parcelado'
+                                  ? 'Valor da parcela'
+                                  : 'Valor'}
+                              </span>
                               <input
                                 type="text"
                                 inputMode="decimal"
@@ -3667,6 +3754,13 @@ function App() {
                                 onChange={handleExpenseFormChange}
                                 required
                               />
+                              {isExpenseCreateRoute && expenseForm.origemLancamento === 'parcelado' ? (
+                                <small>
+                                  {installmentTotalPreview != null
+                                    ? `Total calculado automaticamente: ${currencyFormatter.format(installmentTotalPreview)} (${expenseForm.numeroParcelas}x de ${currencyFormatter.format(installmentValue)}).`
+                                    : 'Informe o valor de cada parcela. O total do registro sera calculado automaticamente.'}
+                                </small>
+                              ) : null}
                             </label>
 
                             <label className="field">
@@ -4016,6 +4110,7 @@ function App() {
                                         && !isCreditCardExpense
                                         && effectiveStatus === 'pago'
                                       const isInstallmentsExpanded = Boolean(expandedInstallmentIds[expense.id])
+                                      const installmentHighlightAmount = getExpenseInstallmentHighlightAmount(expense)
 
                                       return (
                                         <article key={expense.id} className="expense-card">
@@ -4055,7 +4150,20 @@ function App() {
                                               </div>
                                               <div className="expense-card-side">
                                                 <div className="expense-card-amount-block">
-                                                  <strong>{currencyFormatter.format(Number(expense.valor ?? 0))}</strong>
+                                                  {hasInstallments ? (
+                                                    <>
+                                                      <strong>{currencyFormatter.format(installmentHighlightAmount)}</strong>
+                                                      <span className="expense-card-amount-caption">Valor da parcela</span>
+                                                      <span className="expense-card-total-text">
+                                                        Total: {currencyFormatter.format(Number(expense.valor ?? 0))}
+                                                      </span>
+                                                      <span className="expense-card-installment-text">
+                                                        {expense.numeroParcelas}x parcelas
+                                                      </span>
+                                                    </>
+                                                  ) : (
+                                                    <strong>{currencyFormatter.format(Number(expense.valor ?? 0))}</strong>
+                                                  )}
                                                   <span className="expense-card-status-text">Status: {effectiveStatus}</span>
                                                 </div>
                                                 <div className="expense-card-actions">
@@ -4160,9 +4268,9 @@ function App() {
                                                     if (isCreditCardExpense) {
                                                       return
                                                     }
-                                                    openPayInstallmentModal(expense, installment)
+                                                    openInstallmentModal(expense, installment)
                                                   }}
-                                                  disabled={installment.status === 'pago' || !canManageExpense || isCreditCardExpense}
+                                                  disabled={!canManageExpense || isCreditCardExpense}
                                                 >
                                                   <span className="installment-number">
                                                     Parcela {installment.numeroParcela}/{expense.numeroParcelas}
@@ -5667,19 +5775,17 @@ function App() {
               <>
                 <p>
                   Isso vai reabrir a fatura <strong>{formatMonthlyReference(selectedInvoice.competencia)}</strong> e desfazer a
-                  quitacao de todos os gastos e parcelas vinculados a ela.
+                  quitacao dos gastos e parcelas vinculados.
                 </p>
-                <p>Caso queira continuar, confirme a reabertura abaixo.</p>
+                <p>Ao confirmar, todos os itens da fatura voltarao para o status pendente.</p>
               </>
             ) : (
               <>
                 <p>
                   Deseja confirmar a quitacao da fatura <strong>{formatMonthlyReference(selectedInvoice.competencia)}</strong>{' '}
-                  no valor de <strong>{currencyFormatter.format(Number(selectedInvoice.valorTotal ?? 0))}</strong>?
+                  de <strong>{selectedInvoice.cartaoDescricao || 'Cartao de credito'}</strong>?
                 </p>
-                <p>
-                  Ao confirmar, todos os gastos e parcelas vinculados a esta fatura serao marcados como pagos.
-                </p>
+                <p>Ao confirmar, todos os gastos e parcelas vinculados a esta fatura serao marcados como pagos.</p>
               </>
             )}
             <div className="confirm-modal-actions">
@@ -5693,7 +5799,7 @@ function App() {
               </button>
               <button
                 type="button"
-                className="primary-button"
+                className={invoiceModalMode === 'reopen' ? 'secondary-button' : 'primary-button'}
                 onClick={invoiceModalMode === 'reopen' ? handleReopenInvoice : handlePayInvoice}
                 disabled={isPayingInvoice || isReopeningInvoice}
               >
@@ -5716,36 +5822,59 @@ function App() {
             onClick={(event) => event.stopPropagation()}
           >
             <span className="feature-label">Confirmacao</span>
-            <h3 id="confirm-pay-installment-title">Pagar parcela</h3>
+            <h3 id="confirm-pay-installment-title">
+              {selectedInstallment.mode === 'reopen' ? 'Reabrir parcela' : 'Pagar parcela'}
+            </h3>
             <p>
-              Deseja confirmar o pagamento da parcela{' '}
-              <strong>
-                {selectedInstallment.installment.numeroParcela}/{selectedInstallment.expense.numeroParcelas}
-              </strong>{' '}
-              de <strong>{selectedInstallment.expense.descricao}</strong> no valor de{' '}
-              <strong>{currencyFormatter.format(Number(selectedInstallment.installment.valorParcela ?? 0))}</strong>?
+              {selectedInstallment.mode === 'reopen'
+                ? (
+                  <>
+                    Deseja confirmar a reabertura da parcela{' '}
+                    <strong>
+                      {selectedInstallment.installment.numeroParcela}/{selectedInstallment.expense.numeroParcelas}
+                    </strong>{' '}
+                    de <strong>{selectedInstallment.expense.descricao}</strong> no valor de{' '}
+                    <strong>{currencyFormatter.format(Number(selectedInstallment.installment.valorParcela ?? 0))}</strong>?
+                  </>
+                )
+                : (
+                  <>
+                    Deseja confirmar o pagamento da parcela{' '}
+                    <strong>
+                      {selectedInstallment.installment.numeroParcela}/{selectedInstallment.expense.numeroParcelas}
+                    </strong>{' '}
+                    de <strong>{selectedInstallment.expense.descricao}</strong> no valor de{' '}
+                    <strong>{currencyFormatter.format(Number(selectedInstallment.installment.valorParcela ?? 0))}</strong>?
+                  </>
+                )}
             </p>
+            {selectedInstallment.mode === 'reopen' ? (
+              <p>Ao confirmar, a parcela voltara para pendente e o pagamento informado sera desfeito.</p>
+            ) : null}
             <div className="confirm-modal-actions">
               <button
                 type="button"
                 className="secondary-button"
                 onClick={closePayInstallmentModal}
-                disabled={isPayingInstallment}
+                disabled={isPayingInstallment || isReopeningInstallment}
               >
                 Cancelar
               </button>
               <button
                 type="button"
-                className="primary-button"
-                onClick={handlePayInstallment}
-                disabled={isPayingInstallment}
+                className={selectedInstallment.mode === 'reopen' ? 'secondary-button' : 'primary-button'}
+                onClick={selectedInstallment.mode === 'reopen' ? handleReopenInstallment : handlePayInstallment}
+                disabled={isPayingInstallment || isReopeningInstallment}
               >
-                {isPayingInstallment ? 'Pagando...' : 'Confirmar pagamento'}
+                {selectedInstallment.mode === 'reopen'
+                  ? (isReopeningInstallment ? 'Reabrindo...' : 'Confirmar reabertura')
+                  : (isPayingInstallment ? 'Pagando...' : 'Confirmar pagamento')}
               </button>
             </div>
           </div>
         </div>
       ) : null}
+
 
       {selectedJointAccount ? (
         <div className="modal-overlay" role="presentation" onClick={closeUnlinkJointAccountModal}>
@@ -5869,3 +5998,5 @@ function App() {
 }
 
 export default App
+
+

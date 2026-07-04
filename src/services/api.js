@@ -374,6 +374,18 @@ export async function payInstallment(token, installmentId, payload = {}) {
   return parseResponse(response)
 }
 
+export async function reopenInstallment(token, installmentId) {
+  const response = await fetch(`${API_URL}/lancamentosBase/${installmentId}/reabertura`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  return parseResponse(response)
+}
+
 export async function deleteExpense(token, expenseId) {
   const response = await fetch(`${API_URL}/gastos/${expenseId}`, {
     method: 'DELETE',
