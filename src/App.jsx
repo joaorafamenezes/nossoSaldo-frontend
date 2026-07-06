@@ -2208,7 +2208,7 @@ function App() {
               id: installment.id,
               descricao: `${expense.descricao} - Parcela ${installment.numeroParcela}/${expense.numeroParcelas || expense.lancamentosBase.length}`,
               dateLabel: installment.dataPagamentoParcela
-                ? `Data de pagamento ${dateFormatter.format(new Date(installment.dataPagamentoParcela))}`
+                ? `Data de pagamento ${formatCalendarDateForDisplay(installment.dataPagamentoParcela)}`
                 : 'Data de pagamento nao informada',
               sortDate: installment.dataPagamentoParcela,
               valor: Number(installment.valorParcela ?? 0),
@@ -2223,7 +2223,7 @@ function App() {
           id: expense.id,
           descricao: expense.descricao,
           dateLabel: expense.dataPagamento
-            ? `Data de pagamento ${dateFormatter.format(new Date(expense.dataPagamento))}`
+            ? `Data de pagamento ${formatCalendarDateForDisplay(expense.dataPagamento)}`
             : 'Data de pagamento nao informada',
           sortDate: expense.dataPagamento,
           valor: Number(expense.valor ?? 0),
