@@ -1659,11 +1659,27 @@ function App() {
         setCategories(categoriesResponse)
       }
 
+      const normalizedExpenses = Array.isArray(expensesResponse?.gastos) ? expensesResponse.gastos : []
+      const normalizedCategories = Array.isArray(categoriesResponse) ? categoriesResponse : categories
+
       setTopCategoryItems(Array.isArray(response)
-        ? response.map((item) => ({
-          categoria: item.categoria ?? 'Sem categoria',
-          total: Number(item.total_gasto ?? item.total ?? 0),
-        }))
+        ? response
+          .map((item) => {
+            const categoria = item.categoria ?? 'Sem categoria'
+            const displayedItems = getTopCategoryExpenseItems(
+              categoria,
+              normalizedExpenses,
+              normalizedCategories,
+              { dateFrom, dateTo },
+            )
+
+            return {
+              categoria,
+              total: displayedItems.reduce((sum, expense) => sum + Number(expense.valor ?? 0), 0),
+            }
+          })
+          .filter((item) => item.total > 0)
+          .sort((firstItem, secondItem) => secondItem.total - firstItem.total)
         : [])
       setExpandedTopCategoryNames({})
     } catch (error) {
@@ -2105,15 +2121,54 @@ function App() {
   const monthlyReportPeriodLabel = monthlyReportRange.dateFrom && monthlyReportRange.dateTo
     ? `${new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric' }).format(new Date(`${monthlyReportRange.dateFrom}T00:00:00`))} - ${new Intl.DateTimeFormat('pt-BR', { month: 'short', year: 'numeric' }).format(new Date(`${monthlyReportRange.dateTo}T00:00:00`))}`
     : 'Periodo nao informado'
-  const getTopCategoryExpenseItems = (categoryName) => (
-    expenses
-      .filter((expense) => {
+  const getTopCategoryExpenseItems = (
+    categoryName,
+    expenseSource = expenses,
+    categoriesSource = categories,
+    range = topCategoryFilters,
+  ) => (
+    expenseSource
+      .flatMap((expense) => {
         if (expense.tipo !== 'despesa' || expense.responsavelId !== profile?.id) {
-          return false
+          return []
         }
 
-        const category = categories.find((item) => item.id === expense.categoriaId)
-        return category?.descricao === categoryName && isDateInRange(expense.competencia, topCategoryFilters.dateFrom, topCategoryFilters.dateTo)
+        const category = categoriesSource.find((item) => item.id === expense.categoriaId)
+
+        if ((category?.descricao || 'Sem categoria') !== categoryName) {
+          return []
+        }
+
+        if (expense.origemLancamento === 'parcelado' && Array.isArray(expense.lancamentosBase)) {
+          return expense.lancamentosBase
+            .filter((installment) => (
+              installment.status === 'pago'
+              && isDateInRange(installment.dataPagamentoParcela, range.dateFrom, range.dateTo)
+            ))
+            .map((installment) => ({
+              id: installment.id,
+              descricao: `${expense.descricao} - Parcela ${installment.numeroParcela}/${expense.numeroParcelas || expense.lancamentosBase.length}`,
+              dateLabel: installment.dataPagamentoParcela
+                ? `Pagamento ${dateFormatter.format(new Date(installment.dataPagamentoParcela))}`
+                : 'Pagamento nao informado',
+              sortDate: installment.dataPagamentoParcela,
+              valor: Number(installment.valorParcela ?? 0),
+            }))
+        }
+
+        if (expense.status !== 'pago' || !isDateInRange(expense.dataPagamento, range.dateFrom, range.dateTo)) {
+          return []
+        }
+
+        return [{
+          id: expense.id,
+          descricao: expense.descricao,
+          dateLabel: expense.dataPagamento
+            ? `Pagamento ${dateFormatter.format(new Date(expense.dataPagamento))}`
+            : 'Pagamento nao informado',
+          sortDate: expense.dataPagamento,
+          valor: Number(expense.valor ?? 0),
+        }]
       })
       .sort((firstExpense, secondExpense) => {
         const firstValue = Number(firstExpense.valor ?? 0)
@@ -2123,8 +2178,8 @@ function App() {
           return secondValue - firstValue
         }
 
-        const firstDate = firstExpense.competencia ? new Date(firstExpense.competencia).getTime() : 0
-        const secondDate = secondExpense.competencia ? new Date(secondExpense.competencia).getTime() : 0
+        const firstDate = firstExpense.sortDate ? new Date(firstExpense.sortDate).getTime() : 0
+        const secondDate = secondExpense.sortDate ? new Date(secondExpense.sortDate).getTime() : 0
         return secondDate - firstDate
       })
   )
@@ -4694,11 +4749,7 @@ function App() {
                                         <div key={expense.id} className="top-category-expense-row">
                                           <div>
                                             <strong>{expense.descricao}</strong>
-                                            <span>
-                                              {expense.competencia
-                                                ? `Competencia ${formatCompetenceDisplay(expense.competencia)}`
-                                                : 'Sem competencia'}
-                                            </span>
+                                            <span>{expense.dateLabel || 'Pagamento nao informado'}</span>
                                           </div>
                                           <span className="top-category-expense-value">
                                             {currencyFormatter.format(Number(expense.valor ?? 0))}
