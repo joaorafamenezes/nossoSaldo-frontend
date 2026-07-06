@@ -2149,8 +2149,8 @@ function App() {
               id: installment.id,
               descricao: `${expense.descricao} - Parcela ${installment.numeroParcela}/${expense.numeroParcelas || expense.lancamentosBase.length}`,
               dateLabel: installment.dataPagamentoParcela
-                ? `Pagamento ${dateFormatter.format(new Date(installment.dataPagamentoParcela))}`
-                : 'Pagamento nao informado',
+                ? `Data de pagamento ${dateFormatter.format(new Date(installment.dataPagamentoParcela))}`
+                : 'Data de pagamento nao informada',
               sortDate: installment.dataPagamentoParcela,
               valor: Number(installment.valorParcela ?? 0),
             }))
@@ -2164,8 +2164,8 @@ function App() {
           id: expense.id,
           descricao: expense.descricao,
           dateLabel: expense.dataPagamento
-            ? `Pagamento ${dateFormatter.format(new Date(expense.dataPagamento))}`
-            : 'Pagamento nao informado',
+            ? `Data de pagamento ${dateFormatter.format(new Date(expense.dataPagamento))}`
+            : 'Data de pagamento nao informada',
           sortDate: expense.dataPagamento,
           valor: Number(expense.valor ?? 0),
         }]
@@ -3031,6 +3031,7 @@ function App() {
     }
 
     const competenceMonth = getCompetenceMonthFromDueDate(expenseForm.dataVencimento) || expenseForm.competencia
+    const paymentDate = expenseForm.status === 'pago' ? new Date().toISOString() : null
     const payload = {
       descricao: expenseForm.descricao,
       tipo: expenseForm.tipo,
@@ -3039,6 +3040,7 @@ function App() {
       valor: parseCurrencyInput(expenseForm.valor),
       competencia: normalizeCompetenceForPayload(competenceMonth),
       dataVencimento: expenseForm.dataVencimento || null,
+      dataPagamento: paymentDate,
       dataFimRecorrencia: expenseForm.origemLancamento === 'recorrente'
         ? (expenseForm.dataFimRecorrencia || null)
         : null,
@@ -3136,6 +3138,7 @@ function App() {
     const normalizedValue = expenseForm.origemLancamento === 'parcelado'
       ? Math.round(inputValue * Number(expenseForm.numeroParcelas) * 100) / 100
       : inputValue
+    const paymentDate = expenseForm.status === 'pago' ? new Date().toISOString() : null
     const competenceMonth = getCompetenceMonthFromDueDate(expenseForm.dataVencimento) || expenseForm.competencia
     const payload = {
       descricao: expenseForm.descricao,
@@ -3147,6 +3150,7 @@ function App() {
       valor: normalizedValue,
       competencia: normalizeCompetenceForPayload(competenceMonth),
       dataVencimento: expenseForm.dataVencimento || null,
+      dataPagamento: paymentDate,
       dataFimRecorrencia: expenseForm.origemLancamento === 'recorrente'
         ? (expenseForm.dataFimRecorrencia || null)
         : null,
@@ -4303,7 +4307,7 @@ function App() {
                                                   : 'Sem vencimento informado'}
                                               </span>
                                               {expense.dataPagamento ? (
-                                                <span>Pagamento {dateFormatter.format(new Date(expense.dataPagamento))}</span>
+                                                <span>Data de pagamento {dateFormatter.format(new Date(expense.dataPagamento))}</span>
                                               ) : null}
                                               <span>
                                                 {expense.createdAt
@@ -6049,5 +6053,6 @@ function App() {
 }
 
 export default App
+
 
 
