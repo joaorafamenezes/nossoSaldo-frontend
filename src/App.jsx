@@ -37,6 +37,11 @@ import {
 
 const isDevelopmentEnvironment = import.meta.env.DEV
 const THEME_STORAGE_KEY = 'nossosaldo.theme'
+const calendarDateFormatter = new Intl.DateTimeFormat('pt-BR', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+})
 
 const initialForm = {
   email: '',
@@ -265,18 +270,72 @@ function parseCurrencyInput(value) {
   return Number(normalizedValue)
 }
 
-function formatDateForInput(value) {
+function getCalendarDateParts(value) {
   if (!value) {
-    return ''
+    return null
+  }
+
+  if (typeof value === 'string') {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/)
+
+    if (match) {
+      return {
+        year: Number(match[1]),
+        month: Number(match[2]),
+        day: Number(match[3]),
+      }
+    }
   }
 
   const date = new Date(value)
 
   if (Number.isNaN(date.getTime())) {
+    return null
+  }
+
+  return {
+    year: date.getUTCFullYear(),
+    month: date.getUTCMonth() + 1,
+    day: date.getUTCDate(),
+  }
+}
+
+function getCalendarDateValue(value) {
+  const parts = getCalendarDateParts(value)
+
+  if (!parts) {
+    return null
+  }
+
+  return new Date(parts.year, parts.month - 1, parts.day)
+}
+
+function formatCalendarDateForInput(value) {
+  const parts = getCalendarDateParts(value)
+
+  if (!parts) {
     return ''
   }
 
-  return date.toISOString().slice(0, 10)
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`
+}
+
+function formatCalendarDateForDisplay(value) {
+  const date = getCalendarDateValue(value)
+
+  if (!date) {
+    return ''
+  }
+
+  return calendarDateFormatter.format(date)
+}
+
+function formatDateForInput(value) {
+  if (!value) {
+    return ''
+  }
+
+  return formatCalendarDateForInput(value)
 }
 
 function formatCompetenceForInput(value) {
@@ -318,13 +377,13 @@ function getCompetenceMonthFromDueDate(value) {
     return value.slice(0, 7)
   }
 
-  const date = new Date(value)
+  const parts = getCalendarDateParts(value)
 
-  if (Number.isNaN(date.getTime())) {
+  if (!parts) {
     return ''
   }
 
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+  return `${parts.year}-${String(parts.month).padStart(2, '0')}`
 }
 
 function formatMonthlyReference(reference) {
@@ -447,9 +506,9 @@ function getInstallmentEffectiveStatus(installment) {
     return installment?.status ?? ''
   }
 
-  const dueDate = new Date(installment.dataVencimentoParcela)
+  const dueDate = getCalendarDateValue(installment.dataVencimentoParcela)
 
-  if (Number.isNaN(dueDate.getTime())) {
+  if (!dueDate) {
     return installment?.status ?? ''
   }
 
@@ -522,9 +581,9 @@ function getEffectiveExpenseStatus(expense) {
     return expense.status
   }
 
-  const dueDate = new Date(expense.dataVencimento)
+  const dueDate = getCalendarDateValue(expense.dataVencimento)
 
-  if (Number.isNaN(dueDate.getTime())) {
+  if (!dueDate) {
     return expense.status
   }
 
@@ -4303,7 +4362,7 @@ function App() {
                                               ) : null}
                                               <span>
                                                 {expense.dataVencimento
-                                                  ? `Vencimento ${dateFormatter.format(new Date(expense.dataVencimento))}`
+                                                  ? `Vencimento ${formatCalendarDateForDisplay(expense.dataVencimento)}`
                                                   : 'Sem vencimento informado'}
                                               </span>
                                               {expense.dataPagamento ? (
@@ -4337,7 +4396,7 @@ function App() {
                                                   <span>{currencyFormatter.format(Number(installment.valorParcela ?? 0))}</span>
                                                   <span>
                                                     {installment.dataVencimentoParcela
-                                                      ? `Vencimento ${dateFormatter.format(new Date(installment.dataVencimentoParcela))}`
+                                                      ? `Vencimento ${formatCalendarDateForDisplay(installment.dataVencimentoParcela)}`
                                                       : 'Sem vencimento'}
                                                   </span>
                                                   <span>
@@ -5396,11 +5455,11 @@ function App() {
                                     </div>
                                     <div className="invoice-summary-item">
                                       <span>Fechamento</span>
-                                      <strong>{invoice.dataFechamento ? dateFormatter.format(new Date(invoice.dataFechamento)) : '--'}</strong>
+                                      <strong>{invoice.dataFechamento ? formatCalendarDateForDisplay(invoice.dataFechamento) : '--'}</strong>
                                     </div>
                                     <div className="invoice-summary-item">
                                       <span>Vencimento</span>
-                                      <strong>{invoice.dataVencimento ? dateFormatter.format(new Date(invoice.dataVencimento)) : '--'}</strong>
+                                      <strong>{invoice.dataVencimento ? formatCalendarDateForDisplay(invoice.dataVencimento) : '--'}</strong>
                                     </div>
                                     <div className="invoice-summary-item">
                                       <span>Itens</span>
@@ -5457,7 +5516,7 @@ function App() {
                                               <strong>{item.label}</strong>
                                               <p>
                                                 {item.competence ? `Competencia ${formatCompetenceDisplay(item.competence)} - ` : ''}
-                                                {item.dueDate ? `Vencimento ${dateFormatter.format(new Date(item.dueDate))}` : 'Sem vencimento'}
+                                                {item.dueDate ? `Vencimento ${formatCalendarDateForDisplay(item.dueDate)}` : 'Sem vencimento'}
                                               </p>
                                               <p>
                                                 {item.createdAt
