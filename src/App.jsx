@@ -642,6 +642,44 @@ function areAllInstallmentsPaid(expense) {
   return expense.lancamentosBase.every((installment) => installment.status === 'pago')
 }
 
+function getInstallmentsInRange(expense, dateFrom, dateTo) {
+  if (expense.origemLancamento !== 'parcelado' || !Array.isArray(expense.lancamentosBase)) {
+    return []
+  }
+
+  return expense.lancamentosBase.filter((installment) => (
+    isDateInRange(installment.dataVencimentoParcela, dateFrom, dateTo)
+  ))
+}
+
+function getExpenseEffectiveStatusForRange(expense, dateFrom, dateTo) {
+  if (expense.origemLancamento !== 'parcelado') {
+    return getEffectiveExpenseStatus(expense)
+  }
+
+  const installmentsInRange = getInstallmentsInRange(expense, dateFrom, dateTo)
+
+  if (installmentsInRange.length === 0) {
+    return getEffectiveExpenseStatus(expense)
+  }
+
+  const installmentStatuses = installmentsInRange.map((installment) => getInstallmentEffectiveStatus(installment))
+
+  if (installmentStatuses.some((status) => status === 'atrasado')) {
+    return 'atrasado'
+  }
+
+  if (installmentStatuses.every((status) => status === 'pago')) {
+    return 'pago'
+  }
+
+  if (installmentStatuses.some((status) => status === 'pendente')) {
+    return 'pendente'
+  }
+
+  return getEffectiveExpenseStatus(expense)
+}
+
 function getExpensePeriodAmount(expense, dateFrom, dateTo) {
   if (expense.origemLancamento === 'parcelado' && Array.isArray(expense.lancamentosBase)) {
     return expense.lancamentosBase
@@ -2050,7 +2088,11 @@ function App() {
     : null
 
   const filteredExpenses = expenses.filter((expense) => {
-    const effectiveStatus = getEffectiveExpenseStatus(expense)
+    const effectiveStatus = getExpenseEffectiveStatusForRange(
+      expense,
+      expenseFilters.dateFrom,
+      expenseFilters.dateTo,
+    )
     const matchesStatus =
       expenseFilters.status === 'todos' ||
       (expenseFilters.status === 'abertos' && ['pendente', 'atrasado'].includes(effectiveStatus)) ||
@@ -2098,7 +2140,7 @@ function App() {
         id: expense.id,
         label: expense.descricao || 'Gasto sem descricao',
         amount: Number(expense.valor ?? 0),
-        status: getEffectiveExpenseStatus(expense),
+        status: getExpenseEffectiveStatusForRange(expense, expenseFilters.dateFrom, expenseFilters.dateTo),
         dueDate: expense.dataVencimento,
         competence: expense.competencia,
         createdAt: expense.createdAt,
@@ -4208,7 +4250,12 @@ function App() {
                                 {isExpanded ? (
                                   <div className="expense-list">
                                     {group.expenses.map((expense) => {
-                                      const effectiveStatus = getEffectiveExpenseStatus(expense)
+                                      const effectiveStatus = getExpenseEffectiveStatusForRange(
+                                        expense,
+                                        expenseFilters.dateFrom,
+                                        expenseFilters.dateTo,
+                                      )
+                                      const globalEffectiveStatus = getEffectiveExpenseStatus(expense)
                                       const installments = Array.isArray(expense.lancamentosBase)
                                         ? expense.lancamentosBase
                                         : []
@@ -4218,15 +4265,15 @@ function App() {
                                       const expenseOwnerLabel = canManageExpense
                                         ? 'Responsavel: voce'
                                         : `Responsavel: ${expense.responsavelNome || 'usuario compartilhado'}`
-                                      const canEditExpense = canManageExpense && effectiveStatus !== 'pago'
-                                      const canDeleteExpense = canManageExpense && effectiveStatus !== 'pago'
+                                      const canEditExpense = canManageExpense && globalEffectiveStatus !== 'pago'
+                                      const canDeleteExpense = canManageExpense && globalEffectiveStatus !== 'pago'
                                       const canPayExpense = canManageExpense
                                         && !isCreditCardExpense
-                                        && effectiveStatus !== 'pago'
+                                        && globalEffectiveStatus !== 'pago'
                                         && areAllInstallmentsPaid(expense)
                                       const canReopenExpense = canManageExpense
                                         && !isCreditCardExpense
-                                        && effectiveStatus === 'pago'
+                                        && globalEffectiveStatus === 'pago'
                                       const isInstallmentsExpanded = Boolean(expandedInstallmentIds[expense.id])
                                       const installmentHighlightAmount = getExpenseInstallmentHighlightAmount(expense)
 
@@ -4242,7 +4289,7 @@ function App() {
                                             title={
                                               canEditExpense
                                                 ? 'Editar gasto'
-                                                : effectiveStatus === 'pago'
+                                                : globalEffectiveStatus === 'pago'
                                                   ? 'Gastos quitados nao podem ser editados.'
                                                   : 'Somente o responsavel pelo gasto pode editar este registro.'
                                             }
