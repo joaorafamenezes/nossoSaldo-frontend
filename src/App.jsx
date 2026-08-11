@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 import nossoSaldoLogo from './assets/nossosaldo-logo.png'
+import { APP_NAME, APP_SUPPORT_EMAIL, APP_VERSION } from './config/appMeta'
 import {
   createCreditCard,
   createExpense,
@@ -42,6 +43,14 @@ const calendarDateFormatter = new Intl.DateTimeFormat('pt-BR', {
   month: '2-digit',
   year: 'numeric',
 })
+
+function formatLocalDateForInput(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return ''
+  }
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+}
 
 const initialForm = {
   email: '',
@@ -120,8 +129,8 @@ function getCurrentMonthRange() {
   const lastDay = new Date(year, month + 1, 0)
 
   return {
-    dateFrom: firstDay.toISOString().slice(0, 10),
-    dateTo: lastDay.toISOString().slice(0, 10),
+    dateFrom: formatLocalDateForInput(firstDay),
+    dateTo: formatLocalDateForInput(lastDay),
     status: 'abertos',
     tipo: 'todos',
     cartaoCreditoId: 'todos',
@@ -139,8 +148,8 @@ function getPreviousMonthDateRange() {
   const lastDay = new Date(now.getFullYear(), now.getMonth(), 0)
 
   return {
-    dateFrom: firstDay.toISOString().slice(0, 10),
-    dateTo: lastDay.toISOString().slice(0, 10),
+    dateFrom: formatLocalDateForInput(firstDay),
+    dateTo: formatLocalDateForInput(lastDay),
   }
 }
 
@@ -150,8 +159,8 @@ function getLastThirtyDaysRange() {
   startDate.setDate(endDate.getDate() - 29)
 
   return {
-    dateFrom: startDate.toISOString().slice(0, 10),
-    dateTo: endDate.toISOString().slice(0, 10),
+    dateFrom: formatLocalDateForInput(startDate),
+    dateTo: formatLocalDateForInput(endDate),
   }
 }
 
@@ -168,8 +177,8 @@ function shiftMonthDateRange(range, monthOffset) {
   const lastDay = new Date(targetYear, targetMonth + 1, 0)
 
   return {
-    dateFrom: firstDay.toISOString().slice(0, 10),
-    dateTo: lastDay.toISOString().slice(0, 10),
+    dateFrom: formatLocalDateForInput(firstDay),
+    dateTo: formatLocalDateForInput(lastDay),
   }
 }
 
@@ -194,8 +203,8 @@ function getDefaultMonthlyReportRange() {
   const lastMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
 
   return {
-    dateFrom: firstMonth.toISOString().slice(0, 10),
-    dateTo: lastMonth.toISOString().slice(0, 10),
+    dateFrom: formatLocalDateForInput(firstMonth),
+    dateTo: formatLocalDateForInput(lastMonth),
   }
 }
 
@@ -384,6 +393,20 @@ function getCompetenceMonthFromDueDate(value) {
   }
 
   return `${parts.year}-${String(parts.month).padStart(2, '0')}`
+}
+
+function buildDueDateFromCompetenceMonth(competenceMonth, currentDueDate) {
+  if (!competenceMonth || !/^\d{4}-\d{2}$/.test(competenceMonth)) {
+    return currentDueDate || ''
+  }
+
+  const [year, month] = competenceMonth.split('-')
+  const currentDueDateParts = getCalendarDateParts(currentDueDate)
+  const dueDay = currentDueDateParts?.day ?? 1
+  const monthIndex = Number(month) - 1
+  const clampedDay = getClampedMonthDay(Number(year), monthIndex, dueDay)
+
+  return `${year}-${month}-${String(clampedDay).padStart(2, '0')}`
 }
 
 function formatMonthlyReference(reference) {
@@ -607,13 +630,11 @@ function isDateInRange(value, dateFrom, dateTo) {
     return false
   }
 
-  const date = new Date(value)
+  const dateOnly = formatCalendarDateForInput(value)
 
-  if (Number.isNaN(date.getTime())) {
+  if (!dateOnly) {
     return false
   }
-
-  const dateOnly = date.toISOString().slice(0, 10)
   const isAfterStart = !dateFrom || dateOnly >= dateFrom
   const isBeforeEnd = !dateTo || dateOnly <= dateTo
 
@@ -947,10 +968,6 @@ function App() {
 
         if (isMounted) {
           setProfile(usuario)
-          setStatus({
-            type: 'success',
-            message: `Sessao ativa para ${usuario.nome}.`,
-          })
         }
       } catch (error) {
         if (!isMounted) {
@@ -987,7 +1004,10 @@ function App() {
       setIsLoadingExpenses(true)
 
       try {
-        const expensesResponse = await getExpenses(token)
+        const expensesResponse = await getExpenses(token, {
+          de: expenseFilters.dateFrom,
+          ate: expenseFilters.dateTo,
+        })
 
         if (!isMounted) {
           return
@@ -1262,7 +1282,10 @@ function App() {
         const [cardsResponse, invoicesResponse, expensesResponse] = await Promise.all([
           creditCards.length === 0 ? getCreditCards(token) : Promise.resolve(creditCards),
           getCreditCardInvoices(token, selectedCardId),
-          getExpenses(token),
+          getExpenses(token, {
+            de: expenseFilters.dateFrom,
+            ate: expenseFilters.dateTo,
+          }),
         ])
 
         if (!isMounted) {
@@ -1531,6 +1554,14 @@ function App() {
         }
       }
 
+      if (name === 'competencia') {
+        return {
+          ...current,
+          competencia: value,
+          dataVencimento: buildDueDateFromCompetenceMonth(value, current.dataVencimento),
+        }
+      }
+
       return {
         ...current,
         [name]: type === 'checkbox' ? checked : name === 'valor' ? formatCurrencyInput(value) : value,
@@ -1747,7 +1778,10 @@ function App() {
     try {
       const [response, expensesResponse, categoriesResponse] = await Promise.all([
         getTopCategoryReport(token, dateFrom, dateTo),
-        getExpenses(token),
+        getExpenses(token, {
+          de: dateFrom,
+          ate: dateTo,
+        }),
         categories.length === 0 ? getCategories(token) : Promise.resolve(categories),
       ])
 
@@ -2989,7 +3023,10 @@ function App() {
       const selectedCardId = invoiceFilters.cartaoCreditoId === 'todos' ? '' : invoiceFilters.cartaoCreditoId
       const [updatedInvoices, updatedExpenses] = await Promise.all([
         getCreditCardInvoices(token, selectedCardId),
-        getExpenses(token),
+        getExpenses(token, {
+          de: expenseFilters.dateFrom,
+          ate: expenseFilters.dateTo,
+        }),
       ])
 
       setCreditCardInvoices(Array.isArray(updatedInvoices) ? updatedInvoices : [])
@@ -3027,7 +3064,10 @@ function App() {
       const selectedCardId = invoiceFilters.cartaoCreditoId === 'todos' ? '' : invoiceFilters.cartaoCreditoId
       const [updatedInvoices, updatedExpenses] = await Promise.all([
         getCreditCardInvoices(token, selectedCardId),
-        getExpenses(token),
+        getExpenses(token, {
+          de: expenseFilters.dateFrom,
+          ate: expenseFilters.dateTo,
+        }),
       ])
 
       setCreditCardInvoices(Array.isArray(updatedInvoices) ? updatedInvoices : [])
@@ -3063,7 +3103,10 @@ function App() {
       await unlinkJointAccount(token, selectedJointAccount.id)
       const [updatedJointAccounts, updatedExpenses] = await Promise.all([
         getJointAccounts(token),
-        getExpenses(token),
+        getExpenses(token, {
+          de: expenseFilters.dateFrom,
+          ate: expenseFilters.dateTo,
+        }),
       ])
 
       setJointAccounts(Array.isArray(updatedJointAccounts) ? updatedJointAccounts : [])
@@ -3131,7 +3174,7 @@ function App() {
       return
     }
 
-    const competenceMonth = getCompetenceMonthFromDueDate(expenseForm.dataVencimento) || expenseForm.competencia
+    const competenceMonth = expenseForm.competencia || getCompetenceMonthFromDueDate(expenseForm.dataVencimento)
     const paymentDate = expenseForm.status === 'pago' ? new Date().toISOString() : null
     const payload = {
       descricao: expenseForm.descricao,
@@ -3240,7 +3283,7 @@ function App() {
       ? Math.round(inputValue * Number(expenseForm.numeroParcelas) * 100) / 100
       : inputValue
     const paymentDate = expenseForm.status === 'pago' ? new Date().toISOString() : null
-    const competenceMonth = getCompetenceMonthFromDueDate(expenseForm.dataVencimento) || expenseForm.competencia
+    const competenceMonth = expenseForm.competencia || getCompetenceMonthFromDueDate(expenseForm.dataVencimento)
     const payload = {
       descricao: expenseForm.descricao,
       tipo: expenseForm.tipo,
@@ -3338,13 +3381,13 @@ function App() {
             <p>Centralize receitas, despesas e compromissos em um espaco comum para dividir responsabilidades com mais clareza.</p>
           </article>
 
-            <article className="feature-card">
+            <article className="feature-card feature-card-highlight">
               <span className="feature-label">Experiencia</span>
               <strong>Responsiva e refinada</strong>
               <p>Visual premium com foco em legibilidade, hierarquia e movimento sutil.</p>
             </article>
 
-            <article className="feature-card">
+            <article className="feature-card feature-card-highlight">
               <span className="feature-label">Proximo passo</span>
               <strong>Painel autenticado</strong>
               <p>Com o token salvo, a base ja fica pronta para navegar para areas privadas.</p>
@@ -3356,25 +3399,24 @@ function App() {
       <section className="login-panel">
         <div className={isDashboardRoute && profile ? 'dashboard-card' : 'login-card'}>
           <div className="login-card-header">
-            {isDevelopmentEnvironment ? (
+            {isDevelopmentEnvironment && !isDashboardRoute ? (
               <span className={`status-pill status-pill-${status.type}`}>{status.type}</span>
             ) : null}
-            <h2>
-              {isPasswordResetRoute
-                ? isRecoveryFlow
-                  ? 'Definir nova senha'
-                  : 'Solicitar troca de senha'
-                : isEmailValidationRoute
-                  ? 'Validar email'
-                : isRegisterRoute
-                  ? 'Criar sua conta'
-                : isDashboardRoute && profile
-                  ? `Dashboard de ${profile.nome}`
-                : profile
-                  ? `Bem-vindo, ${profile.nome}`
-                  : 'Entrar na plataforma'}
-            </h2>
-            <p>{status.message}</p>
+            {isDashboardRoute && profile ? null : (
+              <h2>
+                {isPasswordResetRoute
+                  ? isRecoveryFlow
+                    ? 'Definir nova senha'
+                    : 'Solicitar troca de senha'
+                  : isEmailValidationRoute
+                    ? 'Validar email'
+                  : isRegisterRoute
+                    ? 'Criar sua conta'
+                  : profile
+                    ? `Bem-vindo, ${profile.nome}`
+                    : 'Entrar na plataforma'}
+              </h2>
+            )}
           </div>
 
           {isEmailValidationRoute ? (
@@ -3530,6 +3572,7 @@ function App() {
                     <p>{profile.email}</p>
                   </div>
 
+                  <div className="dashboard-sidebar-scroll">
                   <nav className="dashboard-nav">
                     <button
                       type="button"
@@ -3667,6 +3710,7 @@ function App() {
                       </div>
                     ) : null}
                   </nav>
+                  </div>
 
                   <div className="dashboard-sidebar-actions">
                     <button type="button" className="secondary-button" onClick={handleLogout}>
@@ -5778,8 +5822,12 @@ function App() {
       </section>
 
       <footer className="app-footer">
-        <span>NossoSaldo</span>
-        <a href="mailto:nossosaldoenterprise@gmail.com">nossosaldoenterprise@gmail.com</a>
+        <span>{APP_NAME}</span>
+        <a href={`mailto:${APP_SUPPORT_EMAIL}`}>{APP_SUPPORT_EMAIL}</a>
+        <small className="app-footer-divider" aria-hidden="true">•</small>
+        <small>Versao {APP_VERSION}</small>
+        <small className="app-footer-divider" aria-hidden="true">•</small>
+        <a href="#" onClick={(event) => event.preventDefault()}>Politica de privacidade</a>
       </footer>
 
       {creditCardLimitWarning ? (

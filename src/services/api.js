@@ -1,4 +1,12 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000'
+const API_VERSION = 'v1'
+const API_PREFIX = `/api/${API_VERSION}`
+
+function normalizeApiBaseUrl(rawUrl) {
+  const trimmedUrl = (rawUrl || 'http://localhost:10000').replace(/\/+$/, '')
+  return trimmedUrl.endsWith(API_PREFIX) ? trimmedUrl : `${trimmedUrl}${API_PREFIX}`
+}
+
+const API_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL)
 
 async function parseResponse(response) {
   const body = await response.json().catch(() => null)
@@ -81,8 +89,23 @@ export async function getProfile(token) {
   return parseResponse(response)
 }
 
-export async function getExpenses(token) {
-  const response = await fetch(`${API_URL}/gastos`, {
+export async function getExpenses(token, filters = {}) {
+  const query = new URLSearchParams()
+
+  if (filters.de) {
+    query.set('de', filters.de)
+  }
+
+  if (filters.ate) {
+    query.set('ate', filters.ate)
+  }
+
+  if (filters.competencia) {
+    query.set('competencia', filters.competencia)
+  }
+
+  const querySuffix = query.toString() ? `?${query.toString()}` : ''
+  const response = await fetch(`${API_URL}/gastos${querySuffix}`, {
     headers: {
       'Content-Type': 'application/json',
       'x-access-token': token,
