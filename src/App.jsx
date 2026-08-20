@@ -38,6 +38,7 @@ import {
 
 const isDevelopmentEnvironment = import.meta.env.DEV
 const THEME_STORAGE_KEY = 'nossosaldo.theme'
+const EXPENSES_PER_CATEGORY_PAGE = 10
 const calendarDateFormatter = new Intl.DateTimeFormat('pt-BR', {
   day: '2-digit',
   month: '2-digit',
@@ -823,7 +824,7 @@ function App() {
   const [jointAccounts, setJointAccounts] = useState([])
   const [creditCards, setCreditCards] = useState([])
   const [creditCardInvoices, setCreditCardInvoices] = useState([])
-  const [invoiceFilters, setInvoiceFilters] = useState({ cartaoCreditoId: 'todos', dueMonth: '', sortOrder: 'desc' })
+  const [invoiceFilters, setInvoiceFilters] = useState({ cartaoCreditoId: 'todos', dueMonth: '', sortOrder: 'asc' })
   const [categoryForm, setCategoryForm] = useState(initialCategoryForm)
   const [jointAccountForm, setJointAccountForm] = useState(initialJointAccountForm)
   const [creditCardForm, setCreditCardForm] = useState(initialCreditCardForm)
@@ -882,6 +883,7 @@ function App() {
   const [whoSpendsMoreReport, setWhoSpendsMoreReport] = useState(null)
   const [isLoadingWhoSpendsMoreReport, setIsLoadingWhoSpendsMoreReport] = useState(false)
   const [expandedCategoryIds, setExpandedCategoryIds] = useState({})
+  const [expenseCategoryPages, setExpenseCategoryPages] = useState({})
   const [expandedInstallmentIds, setExpandedInstallmentIds] = useState({})
   const [expandedInvoiceIds, setExpandedInvoiceIds] = useState({})
   const [route, setRoute] = useState(() => window.location.pathname)
@@ -1282,10 +1284,7 @@ function App() {
         const [cardsResponse, invoicesResponse, expensesResponse] = await Promise.all([
           creditCards.length === 0 ? getCreditCards(token) : Promise.resolve(creditCards),
           getCreditCardInvoices(token, selectedCardId),
-          getExpenses(token, {
-            de: expenseFilters.dateFrom,
-            ate: expenseFilters.dateTo,
-          }),
+          getExpenses(token),
         ])
 
         if (!isMounted) {
@@ -2341,6 +2340,13 @@ function App() {
     setExpandedCategoryIds((current) => ({
       ...current,
       [categoryId]: current[categoryId] === false,
+    }))
+  }
+
+  const changeExpenseCategoryPage = (categoryId, page) => {
+    setExpenseCategoryPages((current) => ({
+      ...current,
+      [categoryId]: page,
     }))
   }
 
@@ -4133,6 +4139,10 @@ function App() {
                         <div className="expense-topbar-title">
                           <span className="feature-label">Conteudo inicial</span>
                           <h4>Lista de gastos</h4>
+                          <p className="expense-total-count">
+                            {filteredExpenses.length}{' '}
+                            {filteredExpenses.length === 1 ? 'registro encontrado' : 'registros encontrados'}
+                          </p>
                         </div>
                         <div className="expense-period-nav">
                           <span className="feature-label">Periodo em foco</span>
@@ -4293,7 +4303,12 @@ function App() {
 
                                 {isExpanded ? (
                                   <div className="expense-list">
-                                    {group.expenses.map((expense) => {
+                                    {group.expenses
+                                      .slice(
+                                        ((expenseCategoryPages[group.id] ?? 1) - 1) * EXPENSES_PER_CATEGORY_PAGE,
+                                        (expenseCategoryPages[group.id] ?? 1) * EXPENSES_PER_CATEGORY_PAGE,
+                                      )
+                                      .map((expense) => {
                                       const effectiveStatus = getExpenseEffectiveStatusForRange(
                                         expense,
                                         expenseFilters.dateFrom,
@@ -4322,21 +4337,24 @@ function App() {
                                       const installmentHighlightAmount = getExpenseInstallmentHighlightAmount(expense)
 
                                       return (
-                                        <article key={expense.id} className="expense-card">
+                                        <article
+                                          key={expense.id}
+                                          className={`expense-card expense-card-clickable${canEditExpense ? '' : ' expense-card-clickable-disabled'}`}
+                                          onClick={
+                                            canEditExpense
+                                              ? () => navigateToExpenseEdit(expense.id)
+                                              : undefined
+                                          }
+                                          title={
+                                            canEditExpense
+                                              ? 'Editar gasto'
+                                              : globalEffectiveStatus === 'pago'
+                                                ? 'Gastos quitados nao podem ser editados.'
+                                                : 'Somente o responsavel pelo gasto pode editar este registro.'
+                                          }
+                                        >
                                           <div
-                                            className={`expense-card-clickable${canEditExpense ? '' : ' expense-card-clickable-disabled'}`}
-                                            onClick={
-                                              canEditExpense
-                                                ? () => navigateToExpenseEdit(expense.id)
-                                                : undefined
-                                            }
-                                            title={
-                                              canEditExpense
-                                                ? 'Editar gasto'
-                                                : globalEffectiveStatus === 'pago'
-                                                  ? 'Gastos quitados nao podem ser editados.'
-                                                  : 'Somente o responsavel pelo gasto pode editar este registro.'
-                                            }
+                                            className="expense-card-content"
                                           >
                                             <div className="expense-card-main">
                                               <div className="expense-card-primary">
@@ -4473,7 +4491,8 @@ function App() {
                                                   key={installment.id}
                                                   type="button"
                                                   className={`installment-row ${installment.status === 'pago' ? 'installment-row-paid' : ''}`}
-                                                  onClick={() => {
+                                                  onClick={(event) => {
+                                                    event.stopPropagation()
                                                     if (isCreditCardExpense) {
                                                       return
                                                     }
@@ -4504,7 +4523,38 @@ function App() {
                                           ) : null}
                                         </article>
                                       )
-                                    })}
+                                      })}
+                                    {group.expenses.length > EXPENSES_PER_CATEGORY_PAGE ? (
+                                      <div className="expense-pagination" aria-label={`Paginação da categoria ${group.name}`}>
+                                        <span>
+                                          Página {expenseCategoryPages[group.id] ?? 1} de {Math.ceil(group.expenses.length / EXPENSES_PER_CATEGORY_PAGE)}
+                                        </span>
+                                        <div className="expense-pagination-actions">
+                                          <button
+                                            type="button"
+                                            className="secondary-button expense-pagination-button"
+                                            onClick={() => changeExpenseCategoryPage(group.id, Math.max(1, (expenseCategoryPages[group.id] ?? 1) - 1))}
+                                            disabled={(expenseCategoryPages[group.id] ?? 1) === 1}
+                                          >
+                                            Anterior
+                                          </button>
+                                          <button
+                                            type="button"
+                                            className="secondary-button expense-pagination-button"
+                                            onClick={() => changeExpenseCategoryPage(
+                                              group.id,
+                                              Math.min(
+                                                Math.ceil(group.expenses.length / EXPENSES_PER_CATEGORY_PAGE),
+                                                (expenseCategoryPages[group.id] ?? 1) + 1,
+                                              ),
+                                            )}
+                                            disabled={(expenseCategoryPages[group.id] ?? 1) >= Math.ceil(group.expenses.length / EXPENSES_PER_CATEGORY_PAGE)}
+                                          >
+                                            Próxima
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ) : null}
                                   </div>
                                 ) : null}
                               </section>
