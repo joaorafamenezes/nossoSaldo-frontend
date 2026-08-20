@@ -1650,8 +1650,13 @@
 .expense-filters {
   margin-top: 1rem;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 16rem));
+  grid-template-columns: minmax(14rem, 1.35fr) repeat(5, minmax(0, 1fr));
   gap: 1rem;
+}
+
+.expense-search-field {
+  width: auto;
+  justify-self: stretch;
 }
 
 .expense-topbar {
@@ -3702,6 +3707,10 @@
 
   .expense-filters {
     grid-template-columns: 1fr;
+  }
+
+  .expense-search-field {
+    width: 100%;
   }
 
   .categories-layout {

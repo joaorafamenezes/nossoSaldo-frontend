@@ -53,6 +53,14 @@ function formatLocalDateForInput(date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
+function normalizeSearchText(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+}
+
 const initialForm = {
   email: '',
   senha: '',
@@ -135,6 +143,7 @@ function getCurrentMonthRange() {
     status: 'abertos',
     tipo: 'todos',
     cartaoCreditoId: 'todos',
+    search: '',
   }
 }
 
@@ -2120,7 +2129,9 @@ function App() {
     ? Math.round(installmentValue * installmentCount * 100) / 100
     : null
 
+  const normalizedExpenseSearch = normalizeSearchText(expenseFilters.search)
   const filteredExpenses = expenses.filter((expense) => {
+    const matchesSearch = !normalizedExpenseSearch || normalizeSearchText(expense.descricao).includes(normalizedExpenseSearch)
     const effectiveStatus = getExpenseEffectiveStatusForRange(
       expense,
       expenseFilters.dateFrom,
@@ -2136,7 +2147,7 @@ function App() {
       (expenseFilters.cartaoCreditoId === 'sem-cartao' && !expense.cartaoCreditoId) ||
       expense.cartaoCreditoId === expenseFilters.cartaoCreditoId
 
-    if (!matchesStatus || !matchesTipo || !matchesCreditCard) {
+    if (!matchesSearch || !matchesStatus || !matchesTipo || !matchesCreditCard) {
       return false
     }
 
@@ -4184,6 +4195,18 @@ function App() {
 
 
                       <div className="expense-filters">
+                        <label className="field expense-search-field">
+                          <span>Pesquisar registro</span>
+                          <input
+                            type="search"
+                            name="search"
+                            value={expenseFilters.search}
+                            onChange={handleExpenseFilterChange}
+                            placeholder="Ex.: supermercado"
+                            aria-label="Pesquisar registro pelo nome"
+                          />
+                        </label>
+
                         <label className="field">
                           <span>Data inicial</span>
                           <input
@@ -4271,8 +4294,16 @@ function App() {
                         </div>
                       ) : filteredExpenses.length === 0 ? (
                         <div className="dashboard-empty-state">
-                          <strong>Nenhum gasto encontrado no periodo</strong>
-                          <p>O filtro considera o vencimento do gasto e tambem o vencimento das parcelas vinculadas.</p>
+                          <strong>
+                            {expenseFilters.search.trim()
+                              ? 'Nenhum registro encontrado para a pesquisa'
+                              : 'Nenhum gasto encontrado no periodo'}
+                          </strong>
+                          <p>
+                            {expenseFilters.search.trim()
+                              ? `Nao encontramos registros com o nome "${expenseFilters.search}".`
+                              : 'O filtro considera o vencimento do gasto e tambem o vencimento das parcelas vinculadas.'}
+                          </p>
                         </div>
                       ) : (
                         <div className="expense-tree">
