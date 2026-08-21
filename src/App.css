@@ -2957,6 +2957,38 @@
   line-height: 1.55;
 }
 
+.ai-history-filters {
+  display: grid;
+  grid-template-columns: minmax(15rem, 2fr) repeat(3, minmax(10rem, 1fr));
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 1rem;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.ai-history-filters .field {
+  gap: 0.35rem;
+}
+
+.ai-history-filters .field span {
+  font-size: 0.74rem;
+  color: var(--text-soft);
+}
+
+.ai-history-filters-footer {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-top: 0.2rem;
+}
+
+.ai-history-filters-footer small {
+  color: var(--text-soft);
+}
+
 .ai-assistant-header {
   align-items: start;
 }
@@ -4213,6 +4245,15 @@
   }
 
   .settings-ai-history-header {
+    align-items: start;
+    flex-direction: column;
+  }
+
+  .ai-history-filters {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-history-filters-footer {
     align-items: start;
     flex-direction: column;
   }

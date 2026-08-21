@@ -921,6 +921,7 @@ function App() {
   const [isLoadingIaHistory, setIsLoadingIaHistory] = useState(false)
   const [isRemovingIaHistory, setIsRemovingIaHistory] = useState(false)
   const [iaHistoryMessage, setIaHistoryMessage] = useState({ type: 'idle', text: '' })
+  const [iaHistoryFilters, setIaHistoryFilters] = useState({ search: '', from: '', to: '', modelo: '' })
   const [iaQuestion, setIaQuestion] = useState('')
   const [iaMessages, setIaMessages] = useState([])
   const [isSendingIaQuestion, setIsSendingIaQuestion] = useState(false)
@@ -3606,6 +3607,23 @@ function App() {
     setIaQuestion(pergunta)
   }
 
+  const iaHistoryModels = [...new Set(iaConversationHistory.map((conversation) => conversation.modelo).filter(Boolean))].sort()
+  const filteredIaConversationHistory = iaConversationHistory.filter((conversation) => {
+    const searchTerm = iaHistoryFilters.search.trim().toLocaleLowerCase('pt-BR')
+    const searchableText = `${conversation.pergunta || ''} ${conversation.resposta || ''}`.toLocaleLowerCase('pt-BR')
+    const createdAt = conversation.createdAt ? new Date(conversation.createdAt) : null
+    const createdAtDate = createdAt && !Number.isNaN(createdAt.getTime())
+      ? `${createdAt.getFullYear()}-${String(createdAt.getMonth() + 1).padStart(2, '0')}-${String(createdAt.getDate()).padStart(2, '0')}`
+      : ''
+
+    return (
+      (!searchTerm || searchableText.includes(searchTerm)) &&
+      (!iaHistoryFilters.modelo || conversation.modelo === iaHistoryFilters.modelo) &&
+      (!iaHistoryFilters.from || (createdAtDate && createdAtDate >= iaHistoryFilters.from)) &&
+      (!iaHistoryFilters.to || (createdAtDate && createdAtDate <= iaHistoryFilters.to))
+    )
+  })
+
   return (
     <main className={`app-shell ${isDashboardRoute ? 'app-shell-dashboard' : ''}`}>
       {!isDashboardRoute ? (
@@ -5537,13 +5555,59 @@ function App() {
                           </p>
                         ) : null}
 
+                        <div className="ai-history-filters" aria-label="Filtros do historico da IA">
+                          <label className="field ai-history-search-field">
+                            <span>Pesquisar conversa</span>
+                            <input
+                              type="search"
+                              value={iaHistoryFilters.search}
+                              onChange={(event) => setIaHistoryFilters((current) => ({ ...current, search: event.target.value }))}
+                              placeholder="Busque por pergunta ou resposta"
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Data inicial</span>
+                            <input
+                              type="date"
+                              value={iaHistoryFilters.from}
+                              onChange={(event) => setIaHistoryFilters((current) => ({ ...current, from: event.target.value }))}
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Data final</span>
+                            <input
+                              type="date"
+                              value={iaHistoryFilters.to}
+                              onChange={(event) => setIaHistoryFilters((current) => ({ ...current, to: event.target.value }))}
+                            />
+                          </label>
+                          <label className="field">
+                            <span>Modelo</span>
+                            <select
+                              value={iaHistoryFilters.modelo}
+                              onChange={(event) => setIaHistoryFilters((current) => ({ ...current, modelo: event.target.value }))}
+                            >
+                              <option value="">Todos os modelos</option>
+                              {iaHistoryModels.map((modelo) => <option key={modelo} value={modelo}>{modelo}</option>)}
+                            </select>
+                          </label>
+                          <div className="ai-history-filters-footer">
+                            <small>{filteredIaConversationHistory.length} de {iaConversationHistory.length} conversa(s)</small>
+                            <button type="button" className="secondary-button" onClick={() => setIaHistoryFilters({ search: '', from: '', to: '', modelo: '' })}>
+                              Limpar filtros
+                            </button>
+                          </div>
+                        </div>
+
                         {isLoadingIaHistory ? (
                           <small className="settings-ai-loading">Carregando conversas...</small>
                         ) : iaConversationHistory.length === 0 ? (
                           <div className="settings-ai-history-empty">Nenhuma conversa registrada ainda.</div>
+                        ) : filteredIaConversationHistory.length === 0 ? (
+                          <div className="settings-ai-history-empty">Nenhuma conversa encontrada com esses filtros.</div>
                         ) : (
                           <div className="settings-ai-history-list">
-                            {iaConversationHistory.map((conversation) => (
+                            {filteredIaConversationHistory.map((conversation) => (
                               <article key={conversation.id} className="settings-ai-history-item">
                                 <div className="settings-ai-history-meta">
                                   <span>{conversation.modelo}</span>
