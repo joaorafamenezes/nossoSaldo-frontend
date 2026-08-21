@@ -24,6 +24,7 @@ import {
   getTopCategoryReport,
   getWhoSpendsMoreReport,
   getProfile,
+  askIa,
   login,
   payCreditCardInvoice,
   payInstallment,
@@ -919,6 +920,9 @@ function App() {
   const [iaConversationHistory, setIaConversationHistory] = useState([])
   const [isLoadingIaHistory, setIsLoadingIaHistory] = useState(false)
   const [isRemovingIaHistory, setIsRemovingIaHistory] = useState(false)
+  const [iaQuestion, setIaQuestion] = useState('')
+  const [iaMessages, setIaMessages] = useState([])
+  const [isSendingIaQuestion, setIsSendingIaQuestion] = useState(false)
   const reportMenuItems = [
     {
       id: 'evolucao-mensal',
@@ -1169,7 +1173,7 @@ function App() {
   }, [token, profile, isDashboardRoute, dashboardSection])
 
   useEffect(() => {
-    if (!token || !profile || !isDashboardRoute || dashboardSection !== 'configuracoes') {
+    if (!token || !profile || !isDashboardRoute || !['configuracoes', 'assistente'].includes(dashboardSection)) {
       return
     }
 
@@ -1206,7 +1210,7 @@ function App() {
   }, [token, profile, isDashboardRoute, dashboardSection])
 
   useEffect(() => {
-    if (!token || !profile || !isDashboardRoute || dashboardSection !== 'configuracoes') {
+    if (!token || !profile || !isDashboardRoute || !['configuracoes', 'assistente'].includes(dashboardSection)) {
       return
     }
 
@@ -3554,6 +3558,53 @@ function App() {
     }
   }
 
+  const handleIaQuestionSubmit = async (event) => {
+    event.preventDefault()
+    const pergunta = iaQuestion.trim()
+
+    if (pergunta.length < 3 || isSendingIaQuestion) {
+      return
+    }
+
+    const userMessage = { id: `user-${Date.now()}`, role: 'user', text: pergunta }
+    setIaMessages((current) => [...current, userMessage])
+    setIaQuestion('')
+    setIsSendingIaQuestion(true)
+
+    try {
+      const response = await askIa(token, pergunta)
+      setIaMessages((current) => [
+        ...current,
+        {
+          id: response?.historicoId || `assistant-${Date.now()}`,
+          role: 'assistant',
+          text: response?.resposta || 'Nao foi possivel obter uma resposta.',
+        },
+      ])
+      setIaConversationHistory((current) => [
+        {
+          id: response?.historicoId || `history-${Date.now()}`,
+          pergunta,
+          resposta: response?.resposta || '',
+          modelo: response?.modelo || iaConfiguration?.modelo || 'OpenAI',
+          createdAt: response?.criadaEm || new Date().toISOString(),
+        },
+        ...current,
+      ].slice(0, 50))
+    } catch (error) {
+      setIaMessages((current) => [
+        ...current,
+        { id: `error-${Date.now()}`, role: 'error', text: error.message || 'Nao foi possivel consultar o assistente.' },
+      ])
+    } finally {
+      setIsSendingIaQuestion(false)
+    }
+  }
+
+  const handleIaSuggestion = (pergunta) => {
+    setIaQuestion(pergunta)
+  }
+
   return (
     <main className={`app-shell ${isDashboardRoute ? 'app-shell-dashboard' : ''}`}>
       {!isDashboardRoute ? (
@@ -3841,6 +3892,17 @@ function App() {
                     >
                       <span className="dashboard-nav-icon">{'\uD83D\uDCC8'}</span>
                       <span>Diagnostico</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`dashboard-nav-item ${dashboardSection === 'assistente' ? 'dashboard-nav-item-active' : ''}`}
+                      onClick={() => {
+                        setDashboardSection('assistente')
+                        navigateTo('/dashboard')
+                      }}
+                    >
+                      <span className="dashboard-nav-icon">{'🤖'}</span>
+                      <span>Assistente financeiro</span>
                     </button>
                     <button
                       type="button"
@@ -5352,7 +5414,87 @@ function App() {
                     </section>
                   ) : null}
 
-                  {dashboardSection === 'configuracoes' ? (
+                  {dashboardSection === 'assistente' ? (
+                    <section className="dashboard-expenses ai-assistant-page">
+                      <div className="dashboard-section-header ai-assistant-header">
+                        <div>
+                          <span className="feature-label">Assistente financeiro</span>
+                          <h4>Entenda melhor suas finanças</h4>
+                          <p>Faça perguntas sobre seus gastos e receba respostas baseadas somente nos seus registros.</p>
+                        </div>
+                        <span className={`ai-assistant-connection ${iaConfiguration?.configurada ? 'is-connected' : ''}`}>
+                          {iaConfiguration?.configurada ? 'OpenAI conectada' : 'Configure sua OpenAI'}
+                        </span>
+                      </div>
+
+                      {!iaConfiguration?.configurada ? (
+                        <div className="ai-assistant-empty">
+                          <strong>Configure sua chave da OpenAI para começar.</strong>
+                          <p>A configuração fica disponível em Configuracoes e a chave não é exibida nem armazenada no navegador.</p>
+                          <button type="button" className="primary-button" onClick={() => setDashboardSection('configuracoes')}>
+                            Ir para configuracoes
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="ai-assistant-suggestions">
+                            <span className="settings-option-kicker">Sugestoes rapidas</span>
+                            <div className="ai-assistant-suggestion-list">
+                              {[
+                                'Quanto gastei neste mes?',
+                                'Quais categorias concentram meus maiores gastos?',
+                                'Quais despesas ainda estao pendentes?',
+                              ].map((suggestion) => (
+                                <button key={suggestion} type="button" className="ai-assistant-suggestion" onClick={() => handleIaSuggestion(suggestion)}>
+                                  {suggestion}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="ai-assistant-chat" aria-live="polite">
+                            {iaMessages.length === 0 ? (
+                              <div className="ai-assistant-chat-empty">
+                                <span className="ai-assistant-chat-icon">{'🤖'}</span>
+                                <strong>Como posso ajudar?</strong>
+                                <p>Experimente uma das sugestoes ou escreva uma pergunta sobre seus registros.</p>
+                              </div>
+                            ) : (
+                              iaMessages.map((message) => (
+                                <div key={message.id} className={`ai-assistant-message ai-assistant-message-${message.role}`}>
+                                  <span>{message.role === 'user' ? 'Voce' : 'Assistente'}</span>
+                                  <p>{message.text}</p>
+                                </div>
+                              ))
+                            )}
+                            {isSendingIaQuestion ? (
+                              <div className="ai-assistant-message ai-assistant-message-assistant ai-assistant-message-loading">
+                                <span>Assistente</span>
+                                <p>Consultando seus dados...</p>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <form className="ai-assistant-composer" onSubmit={handleIaQuestionSubmit}>
+                            <textarea
+                              value={iaQuestion}
+                              onChange={(event) => setIaQuestion(event.target.value)}
+                              placeholder="Pergunte sobre seus gastos..."
+                              maxLength={500}
+                              rows={3}
+                              aria-label="Pergunta para o assistente financeiro"
+                            />
+                            <div className="ai-assistant-composer-footer">
+                              <small>As respostas usam apenas os dados da sua conta.</small>
+                              <button type="submit" className="primary-button" disabled={isSendingIaQuestion || iaQuestion.trim().length < 3}>
+                                {isSendingIaQuestion ? 'Consultando...' : 'Perguntar'}
+                              </button>
+                            </div>
+                          </form>
+                        </>
+                      )}
+                    </section>
+                  ) : dashboardSection === 'configuracoes' ? (
                     <section className="dashboard-expenses settings-section">
                       <div className="dashboard-section-header">
                         <div>

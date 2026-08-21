@@ -148,6 +148,19 @@ export async function clearIaConversationHistory(token) {
   return parseResponse(response)
 }
 
+export async function askIa(token, pergunta) {
+  const response = await fetch(`${API_URL}/ia/consultas`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+    body: JSON.stringify({ pergunta }),
+  })
+
+  return parseResponse(response)
+}
+
 export async function getExpenses(token, filters = {}) {
   const query = new URLSearchParams()
 
