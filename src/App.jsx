@@ -5467,6 +5467,12 @@ function App() {
                                 'Quanto gastei neste mes?',
                                 'Quais categorias concentram meus maiores gastos?',
                                 'Quais despesas ainda estao pendentes?',
+                                'Quanto recebi e quanto gastei neste mes?',
+                                'Quais foram os meus maiores gastos no periodo?',
+                                'Quais pagamentos eu ja realizei neste mes?',
+                                'Tenho gastos atrasados? Quais sao?',
+                                'Quais parcelas vencem nos proximos dias?',
+                                'Quanto ja gastei no meu cartao de credito?',
                               ].map((suggestion) => (
                                 <button key={suggestion} type="button" className="ai-assistant-suggestion" onClick={() => handleIaSuggestion(suggestion)}>
                                   {suggestion}
