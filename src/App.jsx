@@ -8,6 +8,7 @@ import {
   createJointAccount,
   createCategory,
   createUser,
+  clearIaConversationHistory,
   deleteExpense,
   getCategories,
   getCreditCards,
@@ -16,6 +17,8 @@ import {
   getExpenses,
   getJointAccounts,
   getInsights,
+  getIaConfiguration,
+  getIaConversationHistory,
   getMonthlyComparisonReport,
   getMonthlyEvolutionReport,
   getTopCategoryReport,
@@ -29,6 +32,8 @@ import {
   reopenExpense,
   reopenCreditCardInvoice,
   requestPasswordReset,
+  removeIaConfiguration,
+  saveIaConfiguration,
   unlinkJointAccount,
   updateExpense,
   updateCreditCard,
@@ -94,6 +99,11 @@ const initialCreditCardForm = {
   diaVencimento: '',
   valorLimite: '',
   observacoes: '',
+}
+
+const initialIaConfigurationForm = {
+  apiKey: '',
+  modelo: 'gpt-4.1-mini',
 }
 
 const CATEGORY_ICON_OPTIONS = [
@@ -900,6 +910,15 @@ function App() {
   const [dashboardSection, setDashboardSection] = useState('gastos')
   const [reportSection, setReportSection] = useState('evolucao-mensal')
   const [themeMode, setThemeMode] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) ?? 'light')
+  const [iaConfiguration, setIaConfiguration] = useState(null)
+  const [iaConfigurationForm, setIaConfigurationForm] = useState(initialIaConfigurationForm)
+  const [isLoadingIaConfiguration, setIsLoadingIaConfiguration] = useState(false)
+  const [isSavingIaConfiguration, setIsSavingIaConfiguration] = useState(false)
+  const [isRemovingIaConfiguration, setIsRemovingIaConfiguration] = useState(false)
+  const [iaConfigurationMessage, setIaConfigurationMessage] = useState({ type: 'idle', text: '' })
+  const [iaConversationHistory, setIaConversationHistory] = useState([])
+  const [isLoadingIaHistory, setIsLoadingIaHistory] = useState(false)
+  const [isRemovingIaHistory, setIsRemovingIaHistory] = useState(false)
   const reportMenuItems = [
     {
       id: 'evolucao-mensal',
@@ -1146,6 +1165,88 @@ function App() {
 
     if (reportSection === 'quem-gasta-mais') {
       loadWhoSpendsMoreReport(whoSpendsMoreFilters)
+    }
+  }, [token, profile, isDashboardRoute, dashboardSection])
+
+  useEffect(() => {
+    if (!token || !profile || !isDashboardRoute || dashboardSection !== 'configuracoes') {
+      return
+    }
+
+    let isMounted = true
+
+    const hydrateIaHistory = async () => {
+      setIsLoadingIaHistory(true)
+
+      try {
+        const response = await getIaConversationHistory(token)
+
+        if (isMounted) {
+          setIaConversationHistory(Array.isArray(response) ? response : [])
+        }
+      } catch (error) {
+        if (isMounted) {
+          setIaConfigurationMessage({
+            type: 'error',
+            text: error.message || 'Nao foi possivel carregar o historico da IA.',
+          })
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingIaHistory(false)
+        }
+      }
+    }
+
+    hydrateIaHistory()
+
+    return () => {
+      isMounted = false
+    }
+  }, [token, profile, isDashboardRoute, dashboardSection])
+
+  useEffect(() => {
+    if (!token || !profile || !isDashboardRoute || dashboardSection !== 'configuracoes') {
+      return
+    }
+
+    let isMounted = true
+
+    const hydrateIaConfiguration = async () => {
+      setIsLoadingIaConfiguration(true)
+      setIaConfigurationMessage({ type: 'idle', text: '' })
+
+      try {
+        const response = await getIaConfiguration(token)
+
+        if (!isMounted) {
+          return
+        }
+
+        setIaConfiguration(response)
+        setIaConfigurationForm((current) => ({
+          ...current,
+          modelo: response?.modelo || current.modelo,
+          apiKey: '',
+        }))
+      } catch (error) {
+        if (isMounted) {
+          setIaConfigurationMessage({
+            type: 'error',
+            text: error.message || 'Nao foi possivel carregar a configuracao da IA.',
+          })
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingIaConfiguration(false)
+        }
+      }
+    }
+
+    hydrateIaConfiguration()
+
+    return () => {
+      isMounted = false
     }
   }, [token, profile, isDashboardRoute, dashboardSection])
 
@@ -3373,6 +3474,86 @@ function App() {
     }
   }
 
+  const handleIaConfigurationChange = (event) => {
+    const { name, value } = event.target
+    setIaConfigurationForm((current) => ({ ...current, [name]: value }))
+    setIaConfigurationMessage({ type: 'idle', text: '' })
+  }
+
+  const handleIaConfigurationSubmit = async (event) => {
+    event.preventDefault()
+
+    if (!iaConfigurationForm.apiKey.trim()) {
+      setIaConfigurationMessage({ type: 'error', text: 'Informe sua chave da OpenAI para salvar a configuracao.' })
+      return
+    }
+
+    setIsSavingIaConfiguration(true)
+    setIaConfigurationMessage({ type: 'loading', text: 'Salvando a configuracao com seguranca...' })
+
+    try {
+      const response = await saveIaConfiguration(token, {
+        apiKey: iaConfigurationForm.apiKey.trim(),
+        modelo: iaConfigurationForm.modelo,
+      })
+
+      setIaConfiguration(response)
+      setIaConfigurationForm((current) => ({ ...current, apiKey: '', modelo: response?.modelo || current.modelo }))
+      setIaConfigurationMessage({ type: 'success', text: 'Configuracao da OpenAI salva com sucesso.' })
+    } catch (error) {
+      setIaConfigurationMessage({
+        type: 'error',
+        text: error.message || 'Nao foi possivel salvar a configuracao da OpenAI.',
+      })
+    } finally {
+      setIsSavingIaConfiguration(false)
+    }
+  }
+
+  const handleIaConfigurationRemove = async () => {
+    if (!window.confirm('Remover a configuracao da OpenAI deste usuario?')) {
+      return
+    }
+
+    setIsRemovingIaConfiguration(true)
+    setIaConfigurationMessage({ type: 'loading', text: 'Removendo a configuracao...' })
+
+    try {
+      const response = await removeIaConfiguration(token)
+      setIaConfiguration(response)
+      setIaConfigurationForm(initialIaConfigurationForm)
+      setIaConfigurationMessage({ type: 'success', text: 'Configuracao removida. As consultas de IA ficam desativadas.' })
+    } catch (error) {
+      setIaConfigurationMessage({
+        type: 'error',
+        text: error.message || 'Nao foi possivel remover a configuracao da OpenAI.',
+      })
+    } finally {
+      setIsRemovingIaConfiguration(false)
+    }
+  }
+
+  const handleIaHistoryRemove = async () => {
+    if (!window.confirm('Apagar todo o historico de conversas da IA?')) {
+      return
+    }
+
+    setIsRemovingIaHistory(true)
+
+    try {
+      await clearIaConversationHistory(token)
+      setIaConversationHistory([])
+      setIaConfigurationMessage({ type: 'success', text: 'Historico de conversas removido com sucesso.' })
+    } catch (error) {
+      setIaConfigurationMessage({
+        type: 'error',
+        text: error.message || 'Nao foi possivel remover o historico da IA.',
+      })
+    } finally {
+      setIsRemovingIaHistory(false)
+    }
+  }
+
   return (
     <main className={`app-shell ${isDashboardRoute ? 'app-shell-dashboard' : ''}`}>
       {!isDashboardRoute ? (
@@ -5221,6 +5402,122 @@ function App() {
                                 <small>Mais conforto visual para uso prolongado.</small>
                               </span>
                             </button>
+                          </div>
+                        </article>
+
+                        <article className="settings-option-card settings-ai-card">
+                          <div className="settings-option-copy">
+                            <span className="settings-option-kicker">Assistente financeiro</span>
+                            <strong>Configure sua OpenAI</strong>
+                            <p>
+                              Use sua propria chave para que o consumo das consultas seja cobrado no seu projeto OpenAI.
+                              A chave e enviada somente para a API e nunca fica salva no navegador.
+                            </p>
+                          </div>
+
+                          <div className={`settings-ai-status settings-ai-status-${iaConfiguration?.configurada ? 'active' : 'idle'}`}>
+                            <span className="settings-ai-status-dot" aria-hidden="true" />
+                            <span>
+                              <strong>{iaConfiguration?.configurada ? 'OpenAI configurada' : 'Nenhum provedor configurado'}</strong>
+                              <small>
+                                {iaConfiguration?.configurada
+                                  ? `Modelo ativo: ${iaConfiguration.modelo}`
+                                  : 'Informe uma chave para habilitar consultas financeiras.'}
+                              </small>
+                            </span>
+                          </div>
+
+                          <form className="settings-ai-form" onSubmit={handleIaConfigurationSubmit}>
+                            <label className="field">
+                              <span>Chave da API OpenAI</span>
+                              <input
+                                type="password"
+                                name="apiKey"
+                                placeholder={iaConfiguration?.configurada ? 'Informe uma nova chave para substituir' : 'sk-...'}
+                                autoComplete="off"
+                                value={iaConfigurationForm.apiKey}
+                                onChange={handleIaConfigurationChange}
+                                minLength={20}
+                                maxLength={300}
+                                required
+                              />
+                            </label>
+
+                            <label className="field">
+                              <span>Modelo</span>
+                              <select name="modelo" value={iaConfigurationForm.modelo} onChange={handleIaConfigurationChange}>
+                                <option value="gpt-4.1-mini">GPT-4.1 mini - equilibrado</option>
+                                <option value="gpt-4.1">GPT-4.1 - maior capacidade</option>
+                                <option value="gpt-4o-mini">GPT-4o mini - economico</option>
+                              </select>
+                            </label>
+
+                            <div className="settings-ai-actions">
+                              <button type="submit" className="primary-button" disabled={isSavingIaConfiguration || isRemovingIaConfiguration}>
+                                {isSavingIaConfiguration ? 'Salvando...' : iaConfiguration?.configurada ? 'Atualizar chave' : 'Salvar configuracao'}
+                              </button>
+                              {iaConfiguration?.configurada ? (
+                                <button
+                                  type="button"
+                                  className="secondary-button settings-ai-remove-button"
+                                  onClick={handleIaConfigurationRemove}
+                                  disabled={isSavingIaConfiguration || isRemovingIaConfiguration}
+                                >
+                                  {isRemovingIaConfiguration ? 'Removendo...' : 'Remover configuracao'}
+                                </button>
+                              ) : null}
+                            </div>
+                          </form>
+
+                          {iaConfigurationMessage.text ? (
+                            <p className={`settings-ai-feedback settings-ai-feedback-${iaConfigurationMessage.type}`} role="status">
+                              {iaConfigurationMessage.text}
+                            </p>
+                          ) : null}
+
+                          {isLoadingIaConfiguration ? (
+                            <small className="settings-ai-loading">Consultando o status da configuracao...</small>
+                          ) : null}
+
+                          <div className="settings-ai-history">
+                            <div className="settings-ai-history-header">
+                              <div>
+                                <span className="settings-option-kicker">Privacidade</span>
+                                <strong>Historico de conversas</strong>
+                                <small>Ultimas 50 consultas deste usuario. Nenhuma chave ou copia dos gastos e armazenada.</small>
+                              </div>
+                              {iaConversationHistory.length > 0 ? (
+                                <button
+                                  type="button"
+                                  className="secondary-button settings-ai-remove-button"
+                                  onClick={handleIaHistoryRemove}
+                                  disabled={isRemovingIaHistory}
+                                >
+                                  {isRemovingIaHistory ? 'Apagando...' : 'Apagar historico'}
+                                </button>
+                              ) : null}
+                            </div>
+
+                            {isLoadingIaHistory ? (
+                              <small className="settings-ai-loading">Carregando conversas...</small>
+                            ) : iaConversationHistory.length === 0 ? (
+                              <div className="settings-ai-history-empty">Nenhuma conversa registrada ainda.</div>
+                            ) : (
+                              <div className="settings-ai-history-list">
+                                {iaConversationHistory.map((conversation) => (
+                                  <article key={conversation.id} className="settings-ai-history-item">
+                                    <div className="settings-ai-history-meta">
+                                      <span>{conversation.modelo}</span>
+                                      <time dateTime={conversation.createdAt}>
+                                        {conversation.createdAt ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(conversation.createdAt)) : '--'}
+                                      </time>
+                                    </div>
+                                    <strong>{conversation.pergunta}</strong>
+                                    <p>{conversation.resposta}</p>
+                                  </article>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </article>
 

@@ -89,6 +89,65 @@ export async function getProfile(token) {
   return parseResponse(response)
 }
 
+export async function getIaConfiguration(token) {
+  const response = await fetch(`${API_URL}/ia/configuracao`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  return parseResponse(response)
+}
+
+export async function saveIaConfiguration(token, payload) {
+  const response = await fetch(`${API_URL}/ia/configuracao`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+    body: JSON.stringify(payload),
+  })
+
+  return parseResponse(response)
+}
+
+export async function removeIaConfiguration(token) {
+  const response = await fetch(`${API_URL}/ia/configuracao`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  return parseResponse(response)
+}
+
+export async function getIaConversationHistory(token) {
+  const response = await fetch(`${API_URL}/ia/consultas/historico`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  return parseResponse(response)
+}
+
+export async function clearIaConversationHistory(token) {
+  const response = await fetch(`${API_URL}/ia/consultas/historico`, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  })
+
+  return parseResponse(response)
+}
+
 export async function getExpenses(token, filters = {}) {
   const query = new URLSearchParams()
 
