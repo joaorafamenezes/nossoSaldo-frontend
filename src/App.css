@@ -2941,6 +2941,22 @@
   gap: 1.15rem;
 }
 
+.ai-history-page {
+  display: grid;
+  gap: 1.15rem;
+}
+
+.ai-history-page-header {
+  align-items: center;
+}
+
+.ai-history-page-header p {
+  max-width: 48rem;
+  margin: 0.35rem 0 0;
+  color: var(--text-soft);
+  line-height: 1.55;
+}
+
 .ai-assistant-header {
   align-items: start;
 }

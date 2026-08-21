@@ -920,6 +920,7 @@ function App() {
   const [iaConversationHistory, setIaConversationHistory] = useState([])
   const [isLoadingIaHistory, setIsLoadingIaHistory] = useState(false)
   const [isRemovingIaHistory, setIsRemovingIaHistory] = useState(false)
+  const [iaHistoryMessage, setIaHistoryMessage] = useState({ type: 'idle', text: '' })
   const [iaQuestion, setIaQuestion] = useState('')
   const [iaMessages, setIaMessages] = useState([])
   const [isSendingIaQuestion, setIsSendingIaQuestion] = useState(false)
@@ -1026,7 +1027,7 @@ function App() {
   }, [token])
 
   useEffect(() => {
-    const shouldHydrateExpenseData = ['gastos', 'diagnostico'].includes(dashboardSection)
+    const shouldHydrateExpenseData = dashboardSection === 'gastos'
 
     if (!token || !profile || !isDashboardRoute || !shouldHydrateExpenseData || isExpenseEditRoute || isExpenseCreateRoute) {
       return
@@ -1173,7 +1174,7 @@ function App() {
   }, [token, profile, isDashboardRoute, dashboardSection])
 
   useEffect(() => {
-    if (!token || !profile || !isDashboardRoute || !['configuracoes', 'assistente'].includes(dashboardSection)) {
+    if (!token || !profile || !isDashboardRoute || !['assistente', 'historico-ia'].includes(dashboardSection)) {
       return
     }
 
@@ -1190,7 +1191,7 @@ function App() {
         }
       } catch (error) {
         if (isMounted) {
-          setIaConfigurationMessage({
+          setIaHistoryMessage({
             type: 'error',
             text: error.message || 'Nao foi possivel carregar o historico da IA.',
           })
@@ -3547,9 +3548,9 @@ function App() {
     try {
       await clearIaConversationHistory(token)
       setIaConversationHistory([])
-      setIaConfigurationMessage({ type: 'success', text: 'Historico de conversas removido com sucesso.' })
+      setIaHistoryMessage({ type: 'success', text: 'Historico de conversas removido com sucesso.' })
     } catch (error) {
-      setIaConfigurationMessage({
+      setIaHistoryMessage({
         type: 'error',
         text: error.message || 'Nao foi possivel remover o historico da IA.',
       })
@@ -3884,17 +3885,6 @@ function App() {
                     </button>
                     <button
                       type="button"
-                      className={`dashboard-nav-item ${dashboardSection === 'diagnostico' ? 'dashboard-nav-item-active' : ''}`}
-                      onClick={() => {
-                        setDashboardSection('diagnostico')
-                        navigateTo('/dashboard')
-                      }}
-                    >
-                      <span className="dashboard-nav-icon">{'\uD83D\uDCC8'}</span>
-                      <span>Diagnostico</span>
-                    </button>
-                    <button
-                      type="button"
                       className={`dashboard-nav-item ${dashboardSection === 'assistente' ? 'dashboard-nav-item-active' : ''}`}
                       onClick={() => {
                         setDashboardSection('assistente')
@@ -3904,6 +3894,21 @@ function App() {
                       <span className="dashboard-nav-icon">{'🤖'}</span>
                       <span>Assistente financeiro</span>
                     </button>
+                    {dashboardSection === 'assistente' || dashboardSection === 'historico-ia' ? (
+                      <div className="dashboard-subnav dashboard-subnav-compact">
+                        <button
+                          type="button"
+                          className={`dashboard-subnav-item ${dashboardSection === 'historico-ia' ? 'dashboard-subnav-item-active' : ''}`}
+                          onClick={() => {
+                            setDashboardSection('historico-ia')
+                            navigateTo('/dashboard')
+                          }}
+                        >
+                          <span className="dashboard-subnav-dot" />
+                          <span className="dashboard-subnav-item-title">Historico da IA</span>
+                        </button>
+                      </div>
+                    ) : null}
                     <button
                       type="button"
                       className={`dashboard-nav-item ${dashboardSection === 'relatorios' ? 'dashboard-nav-item-active' : ''}`}
@@ -4008,7 +4013,7 @@ function App() {
                     </article>
                   </section>
 
-                  {dashboardSection === 'diagnostico' ? (
+                  {false && dashboardSection === 'diagnostico' ? (
                     <section className={`radar-panel radar-panel-${insightsData?.nivelAtencao || 'baixo'}`}>
                     <div className="dashboard-section-header radar-panel-header">
                       <div>
@@ -5494,6 +5499,66 @@ function App() {
                         </>
                       )}
                     </section>
+                  ) : dashboardSection === 'historico-ia' ? (
+                    <section className="dashboard-expenses ai-history-page">
+                      <div className="dashboard-section-header ai-history-page-header">
+                        <div>
+                          <span className="feature-label">Privacidade</span>
+                          <h4>Historico da IA</h4>
+                          <p>Consulte suas perguntas e respostas anteriores. Nenhuma chave ou copia dos gastos e armazenada.</p>
+                        </div>
+                        <button type="button" className="primary-button" onClick={() => setDashboardSection('assistente')}>
+                          Nova consulta
+                        </button>
+                      </div>
+
+                      <div className="settings-ai-history">
+                        <div className="settings-ai-history-header">
+                          <div>
+                            <span className="settings-option-kicker">Consultas recentes</span>
+                            <strong>Ultimas 50 consultas deste usuario</strong>
+                            <small>O historico guarda apenas a pergunta, a resposta e os metadados necessarios.</small>
+                          </div>
+                          {iaConversationHistory.length > 0 ? (
+                            <button
+                              type="button"
+                              className="secondary-button settings-ai-remove-button"
+                              onClick={handleIaHistoryRemove}
+                              disabled={isRemovingIaHistory}
+                            >
+                              {isRemovingIaHistory ? 'Apagando...' : 'Apagar historico'}
+                            </button>
+                          ) : null}
+                        </div>
+
+                        {iaHistoryMessage.text ? (
+                          <p className={`settings-ai-feedback settings-ai-feedback-${iaHistoryMessage.type}`} role="status">
+                            {iaHistoryMessage.text}
+                          </p>
+                        ) : null}
+
+                        {isLoadingIaHistory ? (
+                          <small className="settings-ai-loading">Carregando conversas...</small>
+                        ) : iaConversationHistory.length === 0 ? (
+                          <div className="settings-ai-history-empty">Nenhuma conversa registrada ainda.</div>
+                        ) : (
+                          <div className="settings-ai-history-list">
+                            {iaConversationHistory.map((conversation) => (
+                              <article key={conversation.id} className="settings-ai-history-item">
+                                <div className="settings-ai-history-meta">
+                                  <span>{conversation.modelo}</span>
+                                  <time dateTime={conversation.createdAt}>
+                                    {conversation.createdAt ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(conversation.createdAt)) : '--'}
+                                  </time>
+                                </div>
+                                <strong>{conversation.pergunta}</strong>
+                                <p>{conversation.resposta}</p>
+                              </article>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </section>
                   ) : dashboardSection === 'configuracoes' ? (
                     <section className="dashboard-expenses settings-section">
                       <div className="dashboard-section-header">
@@ -5621,53 +5686,13 @@ function App() {
                             <small className="settings-ai-loading">Consultando o status da configuracao...</small>
                           ) : null}
 
-                          <div className="settings-ai-history">
-                            <div className="settings-ai-history-header">
-                              <div>
-                                <span className="settings-option-kicker">Privacidade</span>
-                                <strong>Historico de conversas</strong>
-                                <small>Ultimas 50 consultas deste usuario. Nenhuma chave ou copia dos gastos e armazenada.</small>
-                              </div>
-                              {iaConversationHistory.length > 0 ? (
-                                <button
-                                  type="button"
-                                  className="secondary-button settings-ai-remove-button"
-                                  onClick={handleIaHistoryRemove}
-                                  disabled={isRemovingIaHistory}
-                                >
-                                  {isRemovingIaHistory ? 'Apagando...' : 'Apagar historico'}
-                                </button>
-                              ) : null}
-                            </div>
-
-                            {isLoadingIaHistory ? (
-                              <small className="settings-ai-loading">Carregando conversas...</small>
-                            ) : iaConversationHistory.length === 0 ? (
-                              <div className="settings-ai-history-empty">Nenhuma conversa registrada ainda.</div>
-                            ) : (
-                              <div className="settings-ai-history-list">
-                                {iaConversationHistory.map((conversation) => (
-                                  <article key={conversation.id} className="settings-ai-history-item">
-                                    <div className="settings-ai-history-meta">
-                                      <span>{conversation.modelo}</span>
-                                      <time dateTime={conversation.createdAt}>
-                                        {conversation.createdAt ? new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(conversation.createdAt)) : '--'}
-                                      </time>
-                                    </div>
-                                    <strong>{conversation.pergunta}</strong>
-                                    <p>{conversation.resposta}</p>
-                                  </article>
-                                ))}
-                              </div>
-                            )}
-                          </div>
                         </article>
 
                         <article className="settings-hint-card">
                           <span className="feature-label">Em breve</span>
                           <h5>O que mais pode entrar aqui</h5>
                           <p>
-                            Esta nova area pode receber notificacoes, preferencias dos relatorios e ajustes do diagnostico financeiro.
+                            Esta nova area pode receber notificacoes e preferencias dos relatorios.
                           </p>
                         </article>
                       </div>
