@@ -5508,6 +5508,12 @@ function App() {
                             <textarea
                               value={iaQuestion}
                               onChange={(event) => setIaQuestion(event.target.value)}
+                              onKeyDown={(event) => {
+                                if (event.key === 'Enter' && !event.shiftKey) {
+                                  event.preventDefault()
+                                  event.currentTarget.form?.requestSubmit()
+                                }
+                              }}
                               placeholder="Pergunte sobre seus gastos..."
                               maxLength={500}
                               rows={3}
