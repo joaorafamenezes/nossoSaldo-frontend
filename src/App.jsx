@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import nossoSaldoLogo from './assets/nossosaldo-logo.png'
 import { APP_NAME, APP_SUPPORT_EMAIL, APP_VERSION } from './config/appMeta'
@@ -925,6 +925,7 @@ function App() {
   const [iaQuestion, setIaQuestion] = useState('')
   const [iaMessages, setIaMessages] = useState([])
   const [isSendingIaQuestion, setIsSendingIaQuestion] = useState(false)
+  const iaChatRef = useRef(null)
   const reportMenuItems = [
     {
       id: 'evolucao-mensal',
@@ -3607,6 +3608,16 @@ function App() {
     setIaQuestion(pergunta)
   }
 
+  useEffect(() => {
+    const chat = iaChatRef.current
+
+    if (!chat) {
+      return
+    }
+
+    chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' })
+  }, [iaMessages, isSendingIaQuestion])
+
   const iaHistoryModels = [...new Set(iaConversationHistory.map((conversation) => conversation.modelo).filter(Boolean))].sort()
   const filteredIaConversationHistory = iaConversationHistory.filter((conversation) => {
     const searchTerm = iaHistoryFilters.search.trim().toLocaleLowerCase('pt-BR')
@@ -5481,7 +5492,7 @@ function App() {
                             </div>
                           </div>
 
-                          <div className="ai-assistant-chat" aria-live="polite">
+                          <div ref={iaChatRef} className="ai-assistant-chat" aria-live="polite">
                             {iaMessages.length === 0 ? (
                               <div className="ai-assistant-chat-empty">
                                 <span className="ai-assistant-chat-icon">{'🤖'}</span>
