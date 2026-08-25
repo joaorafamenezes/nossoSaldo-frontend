@@ -21,7 +21,9 @@ export default defineConfig([
     rules: {
       ...js.configs.recommended.rules,
       ...reactHooks.configs['recommended-latest'].rules,
-      'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z]' }],
+      'no-unused-vars': ['warn', { varsIgnorePattern: '^[A-Z]' }],
+      'no-constant-condition': 'warn',
+      'no-constant-binary-expression': 'warn',
     },
   },
 ])

@@ -15,8 +15,15 @@ Aplicacao web do NossoSaldo, construida com React e Vite. Ela consome a API Noss
 npm run dev      # inicia o servidor Vite local
 npm run build    # gera build de producao
 npm run lint     # executa ESLint
+npm test         # executa os testes unitarios com Vitest
 npm run preview  # serve o build localmente
 ```
+
+## CI
+
+O workflow `.github/workflows/ci.yml` executa automaticamente em pushes para `main`, `master` e `developer`, e em pull requests. Ele instala as dependencias com `npm ci`, executa lint, testes unitarios e gera o build de producao.
+
+Os testes usam Vitest e Testing Library. A suíte cobre os contratos principais do cliente HTTP e interações críticas do assistente financeiro, incluindo envio por Enter, quebra de linha com Shift+Enter e estado de carregamento.
 
 ## Variaveis de ambiente
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import nossoSaldoLogo from './assets/nossosaldo-logo.png'
 import { APP_NAME, APP_SUPPORT_EMAIL, APP_VERSION } from './config/appMeta'
+import AiQuestionComposer from './components/AiQuestionComposer'
 import {
   createCreditCard,
   createExpense,
@@ -5515,28 +5516,12 @@ function App() {
                             ) : null}
                           </div>
 
-                          <form className="ai-assistant-composer" onSubmit={handleIaQuestionSubmit}>
-                            <textarea
-                              value={iaQuestion}
-                              onChange={(event) => setIaQuestion(event.target.value)}
-                              onKeyDown={(event) => {
-                                if (event.key === 'Enter' && !event.shiftKey) {
-                                  event.preventDefault()
-                                  event.currentTarget.form?.requestSubmit()
-                                }
-                              }}
-                              placeholder="Pergunte sobre seus gastos..."
-                              maxLength={500}
-                              rows={3}
-                              aria-label="Pergunta para o assistente financeiro"
-                            />
-                            <div className="ai-assistant-composer-footer">
-                              <small>As respostas usam apenas os dados da sua conta.</small>
-                              <button type="submit" className="primary-button" disabled={isSendingIaQuestion || iaQuestion.trim().length < 3}>
-                                {isSendingIaQuestion ? 'Consultando...' : 'Perguntar'}
-                              </button>
-                            </div>
-                          </form>
+                          <AiQuestionComposer
+                            question={iaQuestion}
+                            isSending={isSendingIaQuestion}
+                            onChange={setIaQuestion}
+                            onSubmit={handleIaQuestionSubmit}
+                          />
                         </>
                       )}
                     </section>
