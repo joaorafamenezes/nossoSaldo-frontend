@@ -3638,6 +3638,13 @@ function App() {
 
   return (
     <main className={`app-shell ${isDashboardRoute ? 'app-shell-dashboard' : ''}`}>
+      {isDevelopmentEnvironment ? (
+        <div className="environment-banner" role="status">
+          <span className="environment-banner-indicator" aria-hidden="true" />
+          <strong>Ambiente local</strong>
+          <span>As alteracoes feitas aqui nao estao em producao.</span>
+        </div>
+      ) : null}
       {!isDashboardRoute ? (
         <section className="brand-panel">
           <div className="brand-copy">

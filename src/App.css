@@ -11,6 +11,48 @@
   min-height: 100vh;
 }
 
+.environment-banner {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 2.35rem;
+  padding: 0.55rem 1rem;
+  color: #713f12;
+  background: linear-gradient(90deg, rgba(254, 243, 199, 0.96), rgba(253, 230, 138, 0.92));
+  border-bottom: 1px solid rgba(180, 83, 9, 0.24);
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
+  position: relative;
+  z-index: 2;
+}
+
+.environment-banner strong {
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.environment-banner-indicator {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #d97706;
+  box-shadow: 0 0 0 0.2rem rgba(217, 119, 6, 0.16);
+}
+
+:root[data-theme='dark'] .environment-banner {
+  color: #fef3c7;
+  background: linear-gradient(90deg, rgba(120, 53, 15, 0.92), rgba(146, 64, 14, 0.88));
+  border-bottom-color: rgba(251, 191, 36, 0.3);
+}
+
+:root[data-theme='dark'] .environment-banner-indicator {
+  background: #fbbf24;
+  box-shadow: 0 0 0 0.2rem rgba(251, 191, 36, 0.18);
+}
+
 .app-shell::before,
 .app-shell::after {
   content: '';
