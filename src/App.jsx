@@ -45,6 +45,7 @@ import {
 
 const isDevelopmentEnvironment = import.meta.env.DEV
 const THEME_STORAGE_KEY = 'nossosaldo.theme'
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'nossosaldo.sidebar-collapsed'
 const EXPENSES_PER_CATEGORY_PAGE = 10
 const calendarDateFormatter = new Intl.DateTimeFormat('pt-BR', {
   day: '2-digit',
@@ -912,6 +913,10 @@ function App() {
   const [dashboardSection, setDashboardSection] = useState('gastos')
   const [reportSection, setReportSection] = useState('evolucao-mensal')
   const [themeMode, setThemeMode] = useState(() => localStorage.getItem(THEME_STORAGE_KEY) ?? 'light')
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
+    () => localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true',
+  )
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [iaConfiguration, setIaConfiguration] = useState(null)
   const [iaConfigurationForm, setIaConfigurationForm] = useState(initialIaConfigurationForm)
   const [isLoadingIaConfiguration, setIsLoadingIaConfiguration] = useState(false)
@@ -985,6 +990,34 @@ function App() {
     document.documentElement.dataset.theme = normalizedTheme
     localStorage.setItem(THEME_STORAGE_KEY, normalizedTheme)
   }, [themeMode])
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(isSidebarCollapsed))
+  }, [isSidebarCollapsed])
+
+  useEffect(() => {
+    const closeSidebarWithEscape = (event) => {
+      if (event.key === 'Escape') {
+        setIsMobileSidebarOpen(false)
+      }
+    }
+
+    window.addEventListener('keydown', closeSidebarWithEscape)
+    return () => window.removeEventListener('keydown', closeSidebarWithEscape)
+  }, [])
+
+  useEffect(() => {
+    if (!isMobileSidebarOpen) {
+      return undefined
+    }
+
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [isMobileSidebarOpen])
 
   useEffect(() => {
     if (!token) {
@@ -2505,6 +2538,8 @@ function App() {
   }, [groupedExpensesList])
 
   const navigateTo = (path) => {
+    setIsMobileSidebarOpen(false)
+
     if (window.location.pathname === path) {
       return
     }
@@ -3638,6 +3673,13 @@ function App() {
 
   return (
     <main className={`app-shell ${isDashboardRoute ? 'app-shell-dashboard' : ''}`}>
+      {isDevelopmentEnvironment ? (
+        <div className="environment-banner" role="status">
+          <span className="environment-banner-indicator" aria-hidden="true" />
+          <strong>Ambiente local</strong>
+          <span>As alteracoes feitas aqui nao estao em producao.</span>
+        </div>
+      ) : null}
       {!isDashboardRoute ? (
         <section className="brand-panel">
           <div className="brand-copy">
@@ -3842,21 +3884,65 @@ function App() {
             </form>
           ) : isDashboardRoute && profile ? (
             <div className="dashboard-layout">
-              <div className="dashboard-shell">
-                <aside className="dashboard-sidebar">
+              <div className={`dashboard-shell ${isSidebarCollapsed ? 'dashboard-shell-sidebar-collapsed' : ''}`}>
+                <button
+                  type="button"
+                  className="dashboard-mobile-menu-trigger"
+                  onClick={() => setIsMobileSidebarOpen(true)}
+                  aria-controls="dashboard-navigation"
+                  aria-expanded={isMobileSidebarOpen}
+                >
+                  <span aria-hidden="true">☰</span>
+                  Menu
+                </button>
+                <button
+                  type="button"
+                  className={`dashboard-sidebar-backdrop ${isMobileSidebarOpen ? 'dashboard-sidebar-backdrop-visible' : ''}`}
+                  onClick={() => setIsMobileSidebarOpen(false)}
+                  aria-label="Fechar menu lateral"
+                  tabIndex={isMobileSidebarOpen ? 0 : -1}
+                />
+                <aside id="dashboard-navigation" className={`dashboard-sidebar ${isSidebarCollapsed ? 'dashboard-sidebar-collapsed' : ''} ${isMobileSidebarOpen ? 'dashboard-sidebar-mobile-open' : ''}`}>
+                  <button
+                    type="button"
+                    className="dashboard-mobile-menu-close"
+                    onClick={() => setIsMobileSidebarOpen(false)}
+                    aria-label="Fechar menu lateral"
+                  >
+                    <span aria-hidden="true">×</span>
+                  </button>
                   <div className="dashboard-sidebar-brand">
                     <div className="dashboard-logo-lockup">
                       <img src={nossoSaldoLogo} alt="NossoSaldo" className="dashboard-logo-image" />
                       <strong>NossoSaldo</strong>
                     </div>
+                    <button
+                      type="button"
+                      className="dashboard-sidebar-toggle"
+                      onClick={() => setIsSidebarCollapsed((isCollapsed) => !isCollapsed)}
+                      aria-label={isSidebarCollapsed ? 'Expandir menu lateral' : 'Minimizar menu lateral'}
+                      aria-pressed={isSidebarCollapsed}
+                      title={isSidebarCollapsed ? 'Expandir menu lateral' : 'Minimizar menu lateral'}
+                    >
+                      <svg viewBox="0 0 48 40" aria-hidden="true" focusable="false">
+                        <rect x="2" y="3" width="44" height="34" rx="8" fill="rgba(255, 255, 255, 0.96)" />
+                        <path d="M10 3h10v34H10a8 8 0 0 1-8-8V11a8 8 0 0 1 8-8Z" fill="#18c9d5" />
+                        <circle cx="11" cy="13" r="1.8" fill="#15536d" />
+                        <circle cx="11" cy="20" r="1.8" fill="#15536d" />
+                        <circle cx="11" cy="27" r="1.8" fill="#15536d" />
+                        <path d="M25 13h12M25 20h12M25 27h8" stroke="#15536d" strokeWidth="3" strokeLinecap="round" />
+                      </svg>
+                    </button>
                     <p>{profile.email}</p>
                   </div>
 
                   <div className="dashboard-sidebar-scroll">
-                  <nav className="dashboard-nav">
+                  <nav className="dashboard-nav" aria-label="Navegação principal">
                     <button
                       type="button"
                       className={`dashboard-nav-item ${dashboardSection === 'gastos' || isExpenseEditRoute || isExpenseCreateRoute ? 'dashboard-nav-item-active' : ''}`}
+                      aria-label="Lista de gastos"
+                      aria-current={dashboardSection === 'gastos' || isExpenseEditRoute || isExpenseCreateRoute ? 'page' : undefined}
                       onClick={() => {
                         setDashboardSection('gastos')
                         navigateTo('/dashboard')
@@ -3868,6 +3954,8 @@ function App() {
                     <button
                       type="button"
                       className={`dashboard-nav-item ${dashboardSection === 'cartoes' || dashboardSection === 'faturas' ? 'dashboard-nav-item-active' : ''}`}
+                      aria-label="Cartoes de credito"
+                      aria-current={dashboardSection === 'cartoes' || dashboardSection === 'faturas' ? 'page' : undefined}
                       onClick={() => {
                         setDashboardSection('cartoes')
                         navigateTo('/dashboard')
@@ -3905,6 +3993,8 @@ function App() {
                     <button
                       type="button"
                       className={`dashboard-nav-item ${dashboardSection === 'conta-conjunta' ? 'dashboard-nav-item-active' : ''}`}
+                      aria-label="Conta conjunta"
+                      aria-current={dashboardSection === 'conta-conjunta' ? 'page' : undefined}
                       onClick={() => {
                         setDashboardSection('conta-conjunta')
                         navigateTo('/dashboard')
@@ -3916,6 +4006,8 @@ function App() {
                     <button
                       type="button"
                       className={`dashboard-nav-item ${dashboardSection === 'assistente' ? 'dashboard-nav-item-active' : ''}`}
+                      aria-label="Assistente financeiro"
+                      aria-current={dashboardSection === 'assistente' ? 'page' : undefined}
                       onClick={() => {
                         setDashboardSection('assistente')
                         navigateTo('/dashboard')
@@ -3942,6 +4034,8 @@ function App() {
                     <button
                       type="button"
                       className={`dashboard-nav-item ${dashboardSection === 'relatorios' ? 'dashboard-nav-item-active' : ''}`}
+                      aria-label="Relatorios"
+                      aria-current={dashboardSection === 'relatorios' ? 'page' : undefined}
                       onClick={() => {
                         setDashboardSection('relatorios')
                         setReportSection('evolucao-mensal')
@@ -3954,6 +4048,8 @@ function App() {
                     <button
                       type="button"
                       className={`dashboard-nav-item ${dashboardSection === 'categorias' ? 'dashboard-nav-item-active' : ''}`}
+                      aria-label="Categorias"
+                      aria-current={dashboardSection === 'categorias' ? 'page' : undefined}
                       onClick={() => {
                         setDashboardSection('categorias')
                         navigateTo('/dashboard')
@@ -3965,6 +4061,8 @@ function App() {
                     <button
                       type="button"
                       className={`dashboard-nav-item ${dashboardSection === 'configuracoes' ? 'dashboard-nav-item-active' : ''}`}
+                      aria-label="Configuracoes"
+                      aria-current={dashboardSection === 'configuracoes' ? 'page' : undefined}
                       onClick={() => {
                         setDashboardSection('configuracoes')
                         navigateTo('/dashboard')
@@ -4008,8 +4106,9 @@ function App() {
                   </div>
 
                   <div className="dashboard-sidebar-actions">
-                    <button type="button" className="secondary-button" onClick={handleLogout}>
-                      Encerrar sessao
+                    <button type="button" className="secondary-button dashboard-logout-button" onClick={handleLogout}>
+                      <span aria-hidden="true">↪</span>
+                      <span className="dashboard-logout-label">Encerrar sessao</span>
                     </button>
                   </div>
                 </aside>
