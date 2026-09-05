@@ -30,6 +30,7 @@ import {
 import { toast } from 'sonner';
 import { saveIaConfiguration, removeIaConfiguration, getIaConfiguration, updatePassword } from '../../services/api';
 import { IaProvedor } from '../../types/ai';
+import { APP_VERSION } from '../../config/appMeta';
 
 interface UserSettingsModalProps {
   isOpen: boolean;
@@ -370,7 +371,7 @@ export function UserSettingsModal({ isOpen, onClose, defaultTab = 'account' }: U
           </div>
 
           <div className="pt-4 border-t border-zinc-800/80 hidden md:block">
-            <p className="text-[11px] text-zinc-500 font-mono">NossoSaldo v2.0 Pro</p>
+            <p className="text-[11px] text-zinc-500 font-mono">NossoSaldo v{APP_VERSION} Pro</p>
           </div>
         </div>
 

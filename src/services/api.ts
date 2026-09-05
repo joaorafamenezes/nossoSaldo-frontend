@@ -1,4 +1,4 @@
-const API_VERSION = 'v1';
+const API_VERSION = 'v2';
 const API_PREFIX = `/api/${API_VERSION}`;
 
 function normalizeApiBaseUrl(rawUrl?: string): string {
