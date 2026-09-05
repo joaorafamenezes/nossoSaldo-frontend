@@ -133,4 +133,33 @@ describe('ExpenseFilters - Quinzena & Período (Critério 001)', () => {
     expect(gastosSegundaQuinzena).toHaveLength(3);
     expect(gastosSegundaQuinzena.map((g) => g.descricao)).toEqual(['Academia', 'Energia', 'Cartão de Crédito']);
   });
+
+  it('permite fixar todos os filtros ativos como padrão no localStorage (História: Status & Filtros Default Configuráveis)', () => {
+    localStorage.clear();
+    const props = {
+      ...defaultProps,
+      selectedType: 'despesa',
+      selectedStatus: 'pendente',
+      selectedCategoryId: 'cat-1',
+      selectedResponsavelId: 'user-123',
+    };
+    render(<ExpenseFilters {...props} />);
+
+    // Clica no botão de fixar padrão localizado após Categorias
+    const pinBtn = screen.getByTitle(/Fixar filtros atuais \(Responsável, Tipo, Status e Categoria\) como padrão/i);
+    expect(pinBtn).toBeInTheDocument();
+
+    fireEvent.click(pinBtn);
+
+    const savedRaw = localStorage.getItem('@NossoSaldo:defaultExpenseFilters');
+    expect(savedRaw).toBeTruthy();
+    const saved = JSON.parse(savedRaw!);
+    expect(saved).toEqual({
+      selectedType: 'despesa',
+      selectedStatus: 'pendente',
+      selectedCategoryId: 'cat-1',
+      selectedResponsavelId: 'user-123',
+    });
+    expect(localStorage.getItem('@NossoSaldo:defaultExpenseStatus')).toBe('pendente');
+  });
 });

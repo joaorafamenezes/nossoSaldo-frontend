@@ -6,7 +6,7 @@ import { ExpenseStatusModal } from './ExpenseStatusModal';
 import { MoneyDisplay } from '../../components/common/MoneyDisplay';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { formatDate, formatCurrency, getDaysDifference } from '../../lib/utils';
+import { formatDate, formatCurrency, getDaysDifference, getEffectiveExpenseValue } from '../../lib/utils';
 import {
   CheckCircle2,
   Clock,
@@ -37,7 +37,7 @@ export function ExpenseTable({
   onToggleSelect,
   onSelectAll,
 }: ExpenseTableProps) {
-  const { categories, toggleExpenseStatus, toggleInstallmentStatus, openEditExpense, deleteExpense } = useAppStore();
+  const { categories, selectedCompetencia, toggleExpenseStatus, toggleInstallmentStatus, openEditExpense, deleteExpense } = useAppStore();
   const [statusExpenseToConfirm, setStatusExpenseToConfirm] = React.useState<Gasto | null>(null);
   const [statusInstallmentToConfirm, setStatusInstallmentToConfirm] = React.useState<any | null>(null);
   const [expandedParcelas, setExpandedParcelas] = React.useState<Record<string, boolean>>({});
@@ -191,21 +191,29 @@ export function ExpenseTable({
                         <CategoryBadge categoria={category} size="sm" />
                       </td>
 
-                      {/* Due Date */}
+                      {/* Due Date or Created Date */}
                       <td className="p-4 font-mono text-zinc-400">
-                        <span>{formatDate(expense.dataVencimento)}</span>
-                        {!isPaid && daysDiff <= 3 && (
-                          <span
-                            className={`ml-1.5 text-[10px] font-bold ${
-                              daysDiff < 0
-                                ? 'text-rose-400'
-                                : daysDiff === 0
-                                ? 'text-amber-400'
-                                : 'text-amber-300'
-                            }`}
-                          >
-                            {daysDiff < 0 ? 'Atrasado' : daysDiff === 0 ? 'Hoje' : `${daysDiff}d`}
+                        {isParcelado ? (
+                          <span title="Data de criação do lançamento parcelado">
+                            {formatDate(expense.createdAt || expense.dataVencimento)}
                           </span>
+                        ) : (
+                          <>
+                            <span>{formatDate(expense.dataVencimento)}</span>
+                            {!isPaid && daysDiff <= 3 && (
+                              <span
+                                className={`ml-1.5 text-[10px] font-bold ${
+                                  daysDiff < 0
+                                    ? 'text-rose-400'
+                                    : daysDiff === 0
+                                    ? 'text-amber-400'
+                                    : 'text-amber-300'
+                                }`}
+                              >
+                                {daysDiff < 0 ? 'Atrasado' : daysDiff === 0 ? 'Hoje' : `${daysDiff}d`}
+                              </span>
+                            )}
+                          </>
                         )}
                       </td>
 
@@ -244,10 +252,18 @@ export function ExpenseTable({
                       {/* Value */}
                       <td className="p-4 text-right">
                         <MoneyDisplay
-                          value={expense.valor}
+                          value={getEffectiveExpenseValue(expense, selectedCompetencia)}
                           type={expense.tipo === 'receita' ? 'positive' : 'negative'}
                           size="sm"
                         />
+                        {isParcelado && (
+                          <span
+                            className="text-[10px] font-mono text-zinc-500 block"
+                            title={`Valor total do parcelamento: ${formatCurrency(expense.valor)}`}
+                          >
+                            Total: {formatCurrency(expense.valor)} ({expense.numeroParcelas || expense.lancamentosBase?.length || 1}x)
+                          </span>
+                        )}
                       </td>
 
                       {/* Actions */}

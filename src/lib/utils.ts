@@ -63,3 +63,72 @@ export function getDaysDifference(targetDateStr: string): number {
   const diffTime = target.getTime() - today.getTime();
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
+
+/**
+ * Retorna o valor efetivo de um lançamento para a competência ou período selecionado.
+ * Para gastos parcelados, retorna o valor da parcela mensal correspondente em vez do valor total do contrato.
+ */
+export function getEffectiveExpenseValue(
+  expense: {
+    valor: number;
+    origemLancamento?: string;
+    numeroParcelas?: number;
+    lancamentosBase?: Array<{
+      valorParcela: number;
+      competencia?: string;
+      dataVencimentoParcela?: string;
+      faturaCartaoCompetencia?: string;
+    }>;
+  },
+  selectedCompetencia?: string,
+  startDate?: string,
+  endDate?: string
+): number {
+  if (!expense) return 0;
+
+  const isParcelado =
+    expense.origemLancamento === 'parcelado' ||
+    (expense.lancamentosBase && expense.lancamentosBase.length > 0) ||
+    ((expense.numeroParcelas || 0) > 1);
+
+  if (!isParcelado) {
+    return expense.valor || 0;
+  }
+
+  // Se possui lista de parcelas filhas
+  if (expense.lancamentosBase && expense.lancamentosBase.length > 0) {
+    if (startDate || endDate) {
+      const match = expense.lancamentosBase.find((lb) => {
+        const d = lb.dataVencimentoParcela ? lb.dataVencimentoParcela.split('T')[0] : '';
+        return (!startDate || d >= startDate) && (!endDate || d <= endDate);
+      });
+      if (match && typeof match.valorParcela === 'number') {
+        return match.valorParcela;
+      }
+    } else if (selectedCompetencia) {
+      const match = expense.lancamentosBase.find(
+        (lb) =>
+          (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
+          (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia)) ||
+          (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(selectedCompetencia))
+      );
+      if (match && typeof match.valorParcela === 'number') {
+        return match.valorParcela;
+      }
+    }
+
+    // Fallback para o valor da primeira parcela cadastrada
+    const firstInst = expense.lancamentosBase[0];
+    if (firstInst && typeof firstInst.valorParcela === 'number') {
+      return firstInst.valorParcela;
+    }
+  }
+
+  // Se não tiver lancamentosBase carregados mas for parcelado por numeroParcelas
+  if (expense.numeroParcelas && expense.numeroParcelas > 1) {
+    return (expense.valor || 0) / expense.numeroParcelas;
+  }
+
+  return expense.valor || 0;
+}
+

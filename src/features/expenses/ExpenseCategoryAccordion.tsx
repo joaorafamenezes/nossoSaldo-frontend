@@ -6,7 +6,7 @@ import { CategoryBadge } from '../../components/common/CategoryBadge';
 import { ExpenseStatusModal } from './ExpenseStatusModal';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { formatDate, formatCurrency, getDaysDifference } from '../../lib/utils';
+import { formatDate, formatCurrency, getDaysDifference, getEffectiveExpenseValue } from '../../lib/utils';
 import {
   ChevronDown,
   ChevronRight,
@@ -18,6 +18,7 @@ import {
   CreditCard,
   User,
   Calendar,
+  Clock,
   RotateCcw,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -34,7 +35,7 @@ export function ExpenseCategoryAccordion({
   selectedIds,
   onToggleSelect,
 }: ExpenseCategoryAccordionProps) {
-  const { categories, toggleExpenseStatus, toggleInstallmentStatus, openEditExpense, deleteExpense } = useAppStore();
+  const { categories, selectedCompetencia, toggleExpenseStatus, toggleInstallmentStatus, openEditExpense, deleteExpense } = useAppStore();
   const [expandedParcelas, setExpandedParcelas] = React.useState<Record<string, boolean>>({});
 
   const toggleParcelas = (id: string) => {
@@ -61,12 +62,12 @@ export function ExpenseCategoryAccordion({
       }
       const group = map.get(catId)!;
       group.items.push(expense);
-      group.total += expense.valor;
+      group.total += getEffectiveExpenseValue(expense, selectedCompetencia);
     });
 
     // Sort categories by total value descending
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
-  }, [expenses, categories]);
+  }, [expenses, categories, selectedCompetencia]);
 
   // Track expanded state of category accordions (all open by default)
   const [expandedCategories, setExpandedCategories] = React.useState<Record<string, boolean>>(() => {
@@ -141,7 +142,7 @@ export function ExpenseCategoryAccordion({
     );
   }
 
-  const grandTotal = expenses.reduce((s, e) => s + e.valor, 0);
+  const grandTotal = expenses.reduce((s, e) => s + getEffectiveExpenseValue(e, selectedCompetencia), 0);
 
   return (
     <div className="space-y-4">
@@ -238,6 +239,8 @@ export function ExpenseCategoryAccordion({
                     const isSelected = selectedIds.includes(expense.id);
                     const isPaid = expense.status === 'pago';
                     const daysDiff = getDaysDifference(expense.dataVencimento);
+                    const isParcelado = expense.origemLancamento === 'parcelado' || (expense.lancamentosBase && expense.lancamentosBase.length > 0) || ((expense.numeroParcelas || 0) > 1);
+                    const effectiveVal = getEffectiveExpenseValue(expense, selectedCompetencia);
 
                     return (
                       <div
@@ -338,11 +341,21 @@ export function ExpenseCategoryAccordion({
                                 <span>Responsável: {expense.responsavelNome?.split(' ')[0] || 'Você'}</span>
                               </span>
 
-                              {/* Vencimento */}
-                              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1 text-[11px] text-slate-600 dark:text-zinc-400 font-mono shadow-xs">
-                                <Calendar className="h-3 w-3 text-slate-400 dark:text-zinc-500" />
-                                <span>Vencimento: {formatDate(expense.dataVencimento)}</span>
-                              </span>
+                              {/* Vencimento ou Data de Criação (se parcelado) */}
+                              {expense.origemLancamento === 'parcelado' || (expense.lancamentosBase && expense.lancamentosBase.length > 0) ? (
+                                <span
+                                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1 text-[11px] text-slate-600 dark:text-zinc-400 font-mono shadow-xs"
+                                  title="Data de criação do lançamento parcelado (vencimentos controlados nas parcelas filhas)"
+                                >
+                                  <Clock className="h-3 w-3 text-indigo-500 dark:text-indigo-400" />
+                                  <span>Criado em: {formatDate(expense.createdAt || expense.dataVencimento)}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1 text-[11px] text-slate-600 dark:text-zinc-400 font-mono shadow-xs">
+                                  <Calendar className="h-3 w-3 text-slate-400 dark:text-zinc-500" />
+                                  <span>Vencimento: {formatDate(expense.dataVencimento)}</span>
+                                </span>
+                              )}
 
                               {/* Data de pagamento (se pago) */}
                               {isPaid && expense.dataPagamento && (
@@ -374,10 +387,18 @@ export function ExpenseCategoryAccordion({
                           <div className="flex flex-row md:flex-col items-center md:items-end justify-between md:justify-center gap-3 pt-3 md:pt-0 border-t md:border-t-0 border-slate-100 dark:border-zinc-800 shrink-0">
                             <div className="text-left md:text-right">
                               <MoneyDisplay
-                                value={expense.valor}
+                                value={effectiveVal}
                                 type={expense.tipo === 'receita' ? 'positive' : 'neutral'}
                                 size="2xl"
                               />
+                              {isParcelado && (
+                                <span
+                                  className="text-[10px] font-mono text-slate-400 dark:text-zinc-500 block"
+                                  title={`Valor total do parcelamento: ${formatCurrency(expense.valor)}`}
+                                >
+                                  Total: {formatCurrency(expense.valor)} ({expense.numeroParcelas || expense.lancamentosBase?.length || 1}x)
+                                </span>
+                              )}
                               <span
                                 className={`text-[10px] font-mono font-bold uppercase tracking-wider block mt-0.5 ${
                                   isPaid

@@ -360,4 +360,104 @@ describe('Gestão de Gastos Parcelados & Critérios 001 e 002', () => {
       expect(screen.getByText('Smart TV OLED 55"')).toBeInTheDocument();
     });
   });
+
+  describe('História: Data de Criação vs Data de Vencimento no Card Principal', () => {
+    it('exibe "Criado em:" para gasto parcelado e "Vencimento:" para gasto à vista no ExpenseCategoryAccordion', () => {
+      render(
+        <ExpenseCategoryAccordion
+          expenses={[mockParceladoExpensePaidInSeptember, mockSingleExpense]}
+          selectedIds={[]}
+          onToggleSelect={vi.fn()}
+        />
+      );
+
+      // Gasto parcelado deve exibir "Criado em:"
+      expect(screen.getByText(/Criado em: 01\/09\/2026/i)).toBeInTheDocument();
+
+      // Gasto à vista deve exibir "Vencimento:"
+      expect(screen.getByText(/Vencimento: 12\/09\/2026/i)).toBeInTheDocument();
+    });
+
+    it('exibe "Criado:" para gasto parcelado e "Vence:" para gasto à vista no ExpenseGrid', () => {
+      render(
+        <ExpenseGrid
+          expenses={[mockParceladoExpensePaidInSeptember, mockSingleExpense]}
+          selectedIds={[]}
+          onToggleSelect={vi.fn()}
+        />
+      );
+
+      expect(screen.getByText(/Criado: 01\/09\/2026/i)).toBeInTheDocument();
+      expect(screen.getByText(/Vence: 12\/09\/2026/i)).toBeInTheDocument();
+    });
+  });
+
+  describe('História: Soma da Categoria com Valor da Parcela e Não Total do Gasto (Critério 001)', () => {
+    it('soma o valor da parcela mensal (ex: R$ 200,00) e não o total do contrato (ex: R$ 1000,00) na categoria', () => {
+      // Exemplo da US:
+      // Gasto 1: À vista R$ 500,00 na categoria Alimentação
+      // Gasto 2: Parcelado R$ 1000,00 em 5x de R$ 200,00 na categoria Alimentação
+      // Total da categoria deve ser R$ 700,00 (500 + 200) e NÃO R$ 1500,00
+      const mockGastoAVista: Gasto = {
+        id: 'gst-a-vista-500',
+        descricao: 'Supermercado Mensal',
+        tipo: 'despesa',
+        status: 'pendente',
+        origemLancamento: 'unico',
+        numeroParcelas: 1,
+        naoCompartilhar: false,
+        valor: 500,
+        competencia: '2026-09-01',
+        dataVencimento: '2026-09-10',
+        categoriaId: 'cat-alimentacao',
+        responsavelId: 'usr-1',
+        createdAt: '2026-09-01T08:00:00Z',
+        updatedAt: '2026-09-01T08:00:00Z',
+      };
+
+      const mockGastoParcelado1000: Gasto = {
+        id: 'gst-parcelado-1000',
+        descricao: 'Cafeteira Expressa',
+        tipo: 'despesa',
+        status: 'pendente',
+        origemLancamento: 'parcelado',
+        numeroParcelas: 5,
+        parcelaAtual: 1,
+        naoCompartilhar: false,
+        valor: 1000,
+        competencia: '2026-09-01',
+        dataVencimento: '2026-09-15',
+        categoriaId: 'cat-alimentacao',
+        responsavelId: 'usr-1',
+        createdAt: '2026-09-01T08:00:00Z',
+        updatedAt: '2026-09-01T08:00:00Z',
+        lancamentosBase: Array.from({ length: 5 }, (_, idx) => ({
+          id: `lb-cafeteira-${idx + 1}`,
+          gastoId: 'gst-parcelado-1000',
+          descricao: `Cafeteira Expressa (${idx + 1}/5)`,
+          valorParcela: 200,
+          numeroParcela: idx + 1,
+          dataVencimentoParcela: `2026-0${9 + idx}-15`,
+          status: 'pendente' as const,
+          competencia: `2026-0${9 + idx}-01`,
+        })),
+      };
+
+      render(
+        <ExpenseCategoryAccordion
+          expenses={[mockGastoAVista, mockGastoParcelado1000]}
+          selectedIds={[]}
+          onToggleSelect={vi.fn()}
+        />
+      );
+
+      // Total no cabeçalho da categoria deve ser R$ 700,00 (500 + 200), não R$ 1500,00
+      expect(screen.getByText('R$ 700,00')).toBeInTheDocument();
+      expect(screen.queryByText('R$ 1.500,00')).not.toBeInTheDocument();
+
+      // Card parcelado exibe o valor da parcela (R$ 200,00) e o total do contrato (Total: R$ 1.000,00 (5x))
+      expect(screen.getByText('R$ 200,00')).toBeInTheDocument();
+      expect(screen.getByText(/Total: R\$ 1\.000,00 \(5x\)/i)).toBeInTheDocument();
+    });
+  });
 });

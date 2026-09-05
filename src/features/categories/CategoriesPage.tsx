@@ -14,7 +14,7 @@ import {
   PieChart,
   Tag,
 } from 'lucide-react';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, getEffectiveExpenseValue } from '../../lib/utils';
 import { toast } from 'sonner';
 
 export function CategoriesPage() {
@@ -23,12 +23,21 @@ export function CategoriesPage() {
   const [categoryToEdit, setCategoryToEdit] = React.useState<Categoria | null>(null);
 
   // Month expenses
-  const monthExpenses = expenses.filter((e) => e.competencia.startsWith(selectedCompetencia));
+  const monthExpenses = expenses.filter((e) => {
+    if (e.lancamentosBase && e.lancamentosBase.length > 0) {
+      return e.lancamentosBase.some(
+        (lb) =>
+          (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
+          (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia))
+      );
+    }
+    return e.competencia.startsWith(selectedCompetencia);
+  });
 
   const totalMonthlyBudget = categories.reduce((sum, c) => sum + (Number(c.teto ?? c.orcamentoMensal ?? 0)), 0);
   const totalMonthlySpent = monthExpenses
     .filter((e) => e.tipo === 'despesa')
-    .reduce((sum, e) => sum + e.valor, 0);
+    .reduce((sum, e) => sum + getEffectiveExpenseValue(e, selectedCompetencia), 0);
 
   const handleEdit = (cat: Categoria) => {
     setCategoryToEdit(cat);
@@ -109,7 +118,7 @@ export function CategoriesPage() {
           const categoryExpenses = monthExpenses.filter(
             (e) => e.categoriaId === category.id && e.tipo === 'despesa'
           );
-          const spent = categoryExpenses.reduce((sum, e) => sum + e.valor, 0);
+          const spent = categoryExpenses.reduce((sum, e) => sum + getEffectiveExpenseValue(e, selectedCompetencia), 0);
           const budget = Number(category.teto ?? category.orcamentoMensal ?? 0);
           const usagePercent = budget > 0 ? Math.round((spent / budget) * 100) : 0;
           const isExceeded = budget > 0 && spent > budget;
