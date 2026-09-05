@@ -3,9 +3,9 @@ import { useAuthStore } from '../../stores/useAuthStore';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { Card } from '../../components/ui/Card';
-import { Wallet, Sparkles, Mail, Lock, User, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Wallet, Sparkles, Mail, Lock, User, ArrowRight, ShieldCheck, LockKeyhole } from 'lucide-react';
 import { toast } from 'sonner';
-import { APP_NAME, APP_VERSION } from '../../config/appMeta';
+import { APP_NAME, APP_VERSION, ALLOW_ACCOUNT_CREATION } from '../../config/appMeta';
 
 export function AuthPage() {
   const { login, register, requestPasswordReset, isLoading, error } = useAuthStore();
@@ -22,6 +22,11 @@ export function AuthPage() {
         await login({ email, senha });
         toast.success('Login efetuado com sucesso!');
       } else if (mode === 'register') {
+        if (!ALLOW_ACCOUNT_CREATION) {
+          toast.info('Novos cadastros estão temporariamente suspensos. Estarão disponíveis em breve no Plano de Fidelidade.');
+          setMode('login');
+          return;
+        }
         await register({ nome, email, senha });
         toast.success('Conta criada com sucesso! Faça seu login.');
         setMode('login');
@@ -61,7 +66,7 @@ export function AuthPage() {
 
         {/* Auth Card */}
         <Card className="p-6 md:p-8 space-y-6 bg-zinc-900/80 border-zinc-800 shadow-2xl backdrop-blur-xl">
-          <div className="flex border-b border-zinc-800 pb-3">
+          <div className="flex border-b border-zinc-800 pb-3 gap-2">
             <button
               onClick={() => setMode('login')}
               className={`flex-1 pb-2 text-xs font-bold transition-colors ${
@@ -73,14 +78,31 @@ export function AuthPage() {
               Entrar
             </button>
             <button
-              onClick={() => setMode('register')}
-              className={`flex-1 pb-2 text-xs font-bold transition-colors ${
-                mode === 'register'
+              type="button"
+              disabled={!ALLOW_ACCOUNT_CREATION}
+              onClick={() => {
+                if (ALLOW_ACCOUNT_CREATION) {
+                  setMode('register');
+                } else {
+                  toast.info('Novos cadastros serão liberados em breve junto ao lançamento do Plano de Fidelidade!');
+                }
+              }}
+              title={!ALLOW_ACCOUNT_CREATION ? 'Novos cadastros estarão disponíveis no Plano de Fidelidade' : undefined}
+              className={`flex-1 pb-2 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 ${
+                !ALLOW_ACCOUNT_CREATION
+                  ? 'opacity-40 cursor-not-allowed text-zinc-500'
+                  : mode === 'register'
                   ? 'border-b-2 border-emerald-500 text-emerald-400'
                   : 'text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              Criar Conta
+              {!ALLOW_ACCOUNT_CREATION && <LockKeyhole className="h-3 w-3" />}
+              <span>Criar Conta</span>
+              {!ALLOW_ACCOUNT_CREATION && (
+                <span className="text-[9px] font-normal px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-400 font-mono">
+                  Em Breve
+                </span>
+              )}
             </button>
           </div>
 
@@ -126,6 +148,18 @@ export function AuthPage() {
                   className="text-[11px] text-zinc-400 hover:text-emerald-400 transition-colors"
                 >
                   Esqueceu a senha?
+                </button>
+              </div>
+            )}
+
+            {mode === 'forgot' && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setMode('login')}
+                  className="text-[11px] text-zinc-400 hover:text-emerald-400 transition-colors"
+                >
+                  ← Voltar para o Login
                 </button>
               </div>
             )}
