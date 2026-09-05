@@ -28,7 +28,7 @@ describe('servico de API', () => {
       expiresIn: 3600,
     })
 
-    expect(fetch).toHaveBeenCalledWith('http://localhost:10000/api/v1/login', {
+    expect(fetch).toHaveBeenCalledWith('http://localhost:10000/api/v2/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: 'joao@example.com', senha: 'segredo' }),
@@ -51,7 +51,7 @@ describe('servico de API', () => {
     })
 
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:10000/api/v1/gastos?de=2026-08-01&ate=2026-08-31&competencia=2026-08',
+      'http://localhost:10000/api/v2/gastos?de=2026-08-01&ate=2026-08-31&competencia=2026-08',
       {
         headers: {
           'Content-Type': 'application/json',
@@ -68,7 +68,7 @@ describe('servico de API', () => {
       resposta: 'R$ 100,00',
     })
 
-    expect(fetch).toHaveBeenCalledWith('http://localhost:10000/api/v1/ia/consultas', {
+    expect(fetch).toHaveBeenCalledWith('http://localhost:10000/api/v2/ia/consultas', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
