@@ -1,25 +1,37 @@
 import * as React from 'react';
-import { Gasto } from '../../types/financial';
+import { Gasto, LancamentoBase } from '../../types/financial';
 import { formatCurrency, formatDate } from '../../lib/utils';
 import { Button } from '../../components/ui/Button';
-import { CheckCircle2, RotateCcw, X, AlertCircle, Calendar, Tag } from 'lucide-react';
+import { CheckCircle2, RotateCcw, X, AlertCircle, Calendar, Tag, Layers } from 'lucide-react';
 
 interface ExpenseStatusModalProps {
   expense: Gasto | null;
+  installment?: LancamentoBase | null;
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (expense: Gasto) => void;
+  onConfirm: (expense: Gasto, installment?: LancamentoBase | null) => void;
 }
 
 export function ExpenseStatusModal({
   expense,
+  installment,
   isOpen,
   onClose,
   onConfirm,
 }: ExpenseStatusModalProps) {
   if (!isOpen || !expense) return null;
 
-  const isPaid = expense.status === 'pago';
+  const isInstallment = !!installment;
+  const isPaid = isInstallment ? installment.status === 'pago' : expense.status === 'pago';
+  const displayDesc = isInstallment
+    ? installment.descricao || `${expense.descricao} (Parcela ${installment.numeroParcela}/${expense.numeroParcelas})`
+    : expense.descricao;
+  const displayDueDate = isInstallment
+    ? installment.dataVencimentoParcela
+    : expense.dataVencimento;
+  const displayValue = isInstallment
+    ? installment.valorParcela
+    : expense.valor;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
@@ -41,10 +53,20 @@ export function ExpenseStatusModal({
             </div>
             <div>
               <h3 className="text-base font-bold text-zinc-100">
-                {isPaid ? 'Confirmar Reabertura' : 'Confirmar Pagamento'}
+                {isPaid
+                  ? isInstallment
+                    ? 'Confirmar Reabertura da Parcela'
+                    : 'Confirmar Reabertura'
+                  : isInstallment
+                  ? 'Confirmar Pagamento da Parcela'
+                  : 'Confirmar Pagamento'}
               </h3>
               <p className="text-xs text-zinc-400">
-                {isPaid ? 'Alterar status para Pendente' : 'Registrar quitação do lançamento'}
+                {isPaid
+                  ? 'Alterar status para Pendente'
+                  : isInstallment
+                  ? `Registrar quitação da Parcela ${installment?.numeroParcela}`
+                  : 'Registrar quitação do lançamento'}
               </p>
             </div>
           </div>
@@ -61,27 +83,31 @@ export function ExpenseStatusModal({
         <div className="space-y-4">
           <div className="rounded-2xl border border-zinc-800 bg-zinc-950/70 p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-zinc-400">Descrição:</span>
-              <strong className="text-sm text-zinc-100 font-semibold truncate max-w-[200px]">
-                {expense.descricao}
+              <span className="text-xs text-zinc-400">
+                {isInstallment ? 'Lançamento / Parcela:' : 'Descrição:'}
+              </span>
+              <strong className="text-sm text-zinc-100 font-semibold truncate max-w-[220px]">
+                {displayDesc}
               </strong>
             </div>
 
             <div className="flex items-center justify-between text-xs">
               <span className="text-zinc-400">Vencimento:</span>
               <span className="text-zinc-200 font-mono">
-                {formatDate(expense.dataVencimento)}
+                {formatDate(displayDueDate)}
               </span>
             </div>
 
             <div className="flex items-center justify-between text-xs pt-2 border-t border-zinc-800/80">
-              <span className="text-zinc-400">Valor do Lançamento:</span>
+              <span className="text-zinc-400">
+                {isInstallment ? 'Valor da Parcela:' : 'Valor do Lançamento:'}
+              </span>
               <strong
                 className={`font-mono text-base font-bold ${
                   expense.tipo === 'receita' ? 'text-emerald-400' : 'text-rose-400'
                 }`}
               >
-                {formatCurrency(expense.valor)}
+                {formatCurrency(displayValue)}
               </strong>
             </div>
           </div>
@@ -101,13 +127,14 @@ export function ExpenseStatusModal({
             <span>
               {isPaid ? (
                 <>
-                  Deseja realmente <strong>reabrir</strong> o lançamento de{' '}
-                  <strong>{formatCurrency(expense.valor)}</strong>? Ele voltará para a lista de despesas pendentes.
+                  Deseja realmente <strong>reabrir</strong> {isInstallment ? `a parcela de` : `o lançamento de`}{' '}
+                  <strong>{formatCurrency(displayValue)}</strong>? O status voltará para <strong>PENDENTE</strong>.
                 </>
               ) : (
                 <>
-                  Deseja realmente confirmar o <strong>pagamento</strong> de{' '}
-                  <strong>{formatCurrency(expense.valor)}</strong>? Ele será marcado como quitado.
+                  Deseja realmente confirmar o <strong>pagamento</strong> {isInstallment ? `da parcela de` : `de`}{' '}
+                  <strong>{formatCurrency(displayValue)}</strong> referente ao vencimento em{' '}
+                  <strong>{formatDate(displayDueDate)}</strong>?
                 </>
               )}
             </span>
@@ -128,7 +155,7 @@ export function ExpenseStatusModal({
                 : 'shadow-glow-emerald'
             }`}
             onClick={() => {
-              onConfirm(expense);
+              onConfirm(expense, installment);
               onClose();
             }}
           >

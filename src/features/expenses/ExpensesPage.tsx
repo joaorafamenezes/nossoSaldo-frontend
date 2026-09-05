@@ -34,18 +34,48 @@ export function ExpensesPage() {
 
   // Filter expenses strictly by selected competence / date range, search and joint account responsible
   const filteredExpenses = React.useMemo(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+
     return expenses.filter((item) => {
+      // Find relevant child installment for the active competence / date range if expense is parcelado
+      let relevantInstallment = undefined;
+      if (item.lancamentosBase && item.lancamentosBase.length > 0) {
+        if (startDate || endDate) {
+          relevantInstallment = item.lancamentosBase.find((lb) => {
+            const d = lb.dataVencimentoParcela ? lb.dataVencimentoParcela.split('T')[0] : '';
+            return (!startDate || d >= startDate) && (!endDate || d <= endDate);
+          });
+        } else {
+          relevantInstallment = item.lancamentosBase.find(
+            (lb) =>
+              (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
+              (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia)) ||
+              (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(selectedCompetencia))
+          );
+        }
+      }
+
       // Date period filtering (vencimento)
       if (startDate || endDate) {
-        const vencimentoStr = item.dataVencimento ? item.dataVencimento.split('T')[0] : '';
-        if (startDate && (!vencimentoStr || vencimentoStr < startDate)) {
-          return false;
-        }
-        if (endDate && (!vencimentoStr || vencimentoStr > endDate)) {
-          return false;
+        if (relevantInstallment) {
+          const instVencStr = relevantInstallment.dataVencimentoParcela ? relevantInstallment.dataVencimentoParcela.split('T')[0] : '';
+          if (startDate && (!instVencStr || instVencStr < startDate)) return false;
+          if (endDate && (!instVencStr || instVencStr > endDate)) return false;
+        } else {
+          const vencimentoStr = item.dataVencimento ? item.dataVencimento.split('T')[0] : '';
+          if (startDate && (!vencimentoStr || vencimentoStr < startDate)) {
+            return false;
+          }
+          if (endDate && (!vencimentoStr || vencimentoStr > endDate)) {
+            return false;
+          }
         }
       } else {
-        if (!item.competencia.startsWith(selectedCompetencia)) return false;
+        const matchesCompetence =
+          item.competencia.startsWith(selectedCompetencia) ||
+          (item.dataVencimento && item.dataVencimento.startsWith(selectedCompetencia)) ||
+          !!relevantInstallment;
+        if (!matchesCompetence) return false;
       }
 
       if (searchQuery) {
@@ -56,7 +86,20 @@ export function ExpensesPage() {
       }
 
       if (selectedType !== 'todos' && item.tipo !== selectedType) return false;
-      if (selectedStatus !== 'todos' && item.status !== selectedStatus) return false;
+
+      // Status filtering with effective status awareness for child installments
+      const effectiveStatus = relevantInstallment ? relevantInstallment.status : item.status;
+      const effectiveDueDate = relevantInstallment ? relevantInstallment.dataVencimentoParcela : item.dataVencimento;
+
+      if (selectedStatus === 'pago' && effectiveStatus !== 'pago') return false;
+      if (selectedStatus === 'pendente' && effectiveStatus !== 'pendente') return false;
+      if (
+        selectedStatus === 'atrasado' &&
+        (effectiveStatus === 'pago' || !effectiveDueDate || effectiveDueDate.split('T')[0] >= todayStr)
+      ) {
+        return false;
+      }
+
       if (selectedCategoryId !== 'todos' && item.categoriaId !== selectedCategoryId) return false;
 
       if (selectedResponsavelId !== 'todos') {

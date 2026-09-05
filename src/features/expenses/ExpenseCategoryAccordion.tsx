@@ -34,7 +34,15 @@ export function ExpenseCategoryAccordion({
   selectedIds,
   onToggleSelect,
 }: ExpenseCategoryAccordionProps) {
-  const { categories, toggleExpenseStatus, openEditExpense, deleteExpense } = useAppStore();
+  const { categories, toggleExpenseStatus, toggleInstallmentStatus, openEditExpense, deleteExpense } = useAppStore();
+  const [expandedParcelas, setExpandedParcelas] = React.useState<Record<string, boolean>>({});
+
+  const toggleParcelas = (id: string) => {
+    setExpandedParcelas((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
 
   // Group expenses by category
   const groupedData = React.useMemo(() => {
@@ -93,6 +101,7 @@ export function ExpenseCategoryAccordion({
   };
 
   const [statusExpenseToConfirm, setStatusExpenseToConfirm] = React.useState<Gasto | null>(null);
+  const [statusInstallmentToConfirm, setStatusInstallmentToConfirm] = React.useState<any | null>(null);
 
   const handleConfirmStatus = (expense: Gasto) => {
     const isPaid = expense.status === 'pago';
@@ -107,6 +116,21 @@ export function ExpenseCategoryAccordion({
       toast.info(`Lançamento "${expense.descricao}" reaberto como PENDENTE.`);
     }
     toggleExpenseStatus(expense.id);
+  };
+
+  const handleToggleInstallment = (gastoId: string, installment: any) => {
+    const isPaid = installment.status === 'pago';
+    if (!isPaid) {
+      confetti({
+        particleCount: 50,
+        spread: 60,
+        origin: { y: 0.8 },
+      });
+      toast.success(`Parcela ${installment.numeroParcela} marcada como PAGA!`);
+    } else {
+      toast.info(`Parcela ${installment.numeroParcela} reaberta como PENDENTE.`);
+    }
+    toggleInstallmentStatus(gastoId, installment.id);
   };
 
   if (groupedData.length === 0) {
@@ -253,10 +277,36 @@ export function ExpenseCategoryAccordion({
                               {/* Category Badge with Icon and Color */}
                               <CategoryBadge categoria={category} size="sm" />
 
-                              {expense.origemLancamento === 'parcelado' && expense.parcelaAtual && (
-                                <Badge variant="purple" className="text-[10px] font-mono font-bold">
-                                  Parcela {expense.parcelaAtual}/{expense.numeroParcelas}
-                                </Badge>
+                              {/* Installment Badge or Toggle Button */}
+                              {(expense.origemLancamento === 'parcelado' || (expense.lancamentosBase && expense.lancamentosBase.length > 0)) && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleParcelas(expense.id);
+                                  }}
+                                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-bold transition-all cursor-pointer ${
+                                    expandedParcelas[expense.id]
+                                      ? 'border-indigo-500/50 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 ring-1 ring-indigo-500/30'
+                                      : 'border-purple-300 dark:border-purple-500/30 bg-purple-50 dark:bg-purple-950/30 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/40'
+                                  }`}
+                                  title="Clique para expandir/minimizar as parcelas deste registro"
+                                >
+                                  <Repeat className="h-3 w-3 text-purple-500" />
+                                  <span>
+                                    {expense.numeroParcelas || expense.lancamentosBase?.length || 1}x Parcelas
+                                    {expense.lancamentosBase
+                                      ? ` (${expense.lancamentosBase.filter((l) => l.status === 'pago').length}/${expense.lancamentosBase.length} pagas)`
+                                      : expense.parcelaAtual
+                                      ? ` (Atual: ${expense.parcelaAtual})`
+                                      : ''}
+                                  </span>
+                                  <ChevronDown
+                                    className={`h-3 w-3 transition-transform ${
+                                      expandedParcelas[expense.id] ? 'rotate-180 text-indigo-500' : 'text-purple-400'
+                                    }`}
+                                  />
+                                </button>
                               )}
                             </div>
 
@@ -343,10 +393,17 @@ export function ExpenseCategoryAccordion({
 
                             {/* Action Buttons */}
                             <div className="flex items-center gap-2">
+                              {/* If parcelado, monthly actions are performed via the child installments. Parent shows Pay all / Reopen all */}
                               <Button
                                 size="sm"
                                 variant={isPaid ? 'secondary' : 'primary'}
-                                onClick={() => setStatusExpenseToConfirm(expense)}
+                                onClick={() => {
+                                  if (expense.origemLancamento === 'parcelado' && !expandedParcelas[expense.id]) {
+                                    toggleParcelas(expense.id);
+                                  }
+                                  setStatusInstallmentToConfirm(null);
+                                  setStatusExpenseToConfirm(expense);
+                                }}
                                 className={`text-xs font-bold px-4 py-1.5 rounded-xl transition-all ${
                                   isPaid
                                     ? 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-700 border border-slate-200 dark:border-zinc-700'
@@ -385,6 +442,114 @@ export function ExpenseCategoryAccordion({
                             </div>
                           </div>
                         </div>
+
+                        {/* Expandable Child Installments Section (Minimizar / Maximizar) */}
+                        {expandedParcelas[expense.id] && (
+                          <div className="mt-4 pt-4 border-t border-slate-200/80 dark:border-zinc-800 space-y-3 animate-in fade-in duration-200">
+                            <div className="flex flex-wrap items-center justify-between gap-2 bg-indigo-50/70 dark:bg-indigo-950/30 p-2.5 rounded-xl border border-indigo-200/60 dark:border-indigo-500/20">
+                              <div className="flex items-center gap-2">
+                                <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse" />
+                                <span className="text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                                  Detalhamento das Parcelas ({expense.numeroParcelas}x)
+                                </span>
+                                <span className="text-[11px] text-slate-500 dark:text-zinc-400">
+                                  — Operações de pagamento e conferência mês a mês
+                                </span>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleParcelas(expense.id)}
+                                className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:underline"
+                              >
+                                Recolher parcelas ▴
+                              </button>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                              {(expense.lancamentosBase && expense.lancamentosBase.length > 0
+                                ? expense.lancamentosBase
+                                : Array.from({ length: expense.numeroParcelas || 1 }, (_, idx) => {
+                                    const num = idx + 1;
+                                    const baseDate = new Date(expense.dataVencimento || new Date());
+                                    baseDate.setMonth(baseDate.getMonth() + idx);
+                                    return {
+                                      id: `temp-${expense.id}-${num}`,
+                                      gastoId: expense.id,
+                                      numeroParcela: num,
+                                      valorParcela: expense.valor / (expense.numeroParcelas || 1),
+                                      dataVencimentoParcela: baseDate.toISOString().split('T')[0],
+                                      status: num <= (expense.parcelaAtual || 1) && expense.status === 'pago' ? 'pago' : 'pendente',
+                                    };
+                                  })
+                              ).map((inst: any) => {
+                                const isInstPaid = inst.status === 'pago';
+                                const instDaysDiff = getDaysDifference(inst.dataVencimentoParcela);
+                                return (
+                                  <div
+                                    key={inst.id}
+                                    className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
+                                      isInstPaid
+                                        ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-500/30 shadow-xs'
+                                        : 'bg-white dark:bg-zinc-950/80 border-slate-200 dark:border-zinc-800 hover:border-slate-300 dark:hover:border-zinc-700'
+                                    }`}
+                                  >
+                                    <div className="min-w-0 pr-2">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-xs font-bold font-mono text-slate-800 dark:text-zinc-100">
+                                          Parcela {inst.numeroParcela}/{expense.numeroParcelas || expense.lancamentosBase?.length || 1}
+                                        </span>
+                                        <Badge
+                                          variant={isInstPaid ? 'success' : instDaysDiff < 0 ? 'danger' : 'warning'}
+                                          className="text-[9px] px-1.5 py-0"
+                                        >
+                                          {isInstPaid ? 'Paga' : instDaysDiff < 0 ? 'Atrasada' : 'Pendente'}
+                                        </Badge>
+                                      </div>
+                                      <p className="text-[11px] font-mono text-slate-500 dark:text-zinc-400 mt-1">
+                                        Vencimento: {formatDate(inst.dataVencimentoParcela)}
+                                      </p>
+                                      {isInstPaid && inst.dataPagamentoParcela && (
+                                        <p className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400">
+                                          Pago em: {formatDate(inst.dataPagamentoParcela)}
+                                        </p>
+                                      )}
+                                      <p className="text-xs font-bold font-mono text-slate-900 dark:text-zinc-100 mt-0.5">
+                                        {formatCurrency(inst.valorParcela)}
+                                      </p>
+                                    </div>
+
+                                    <Button
+                                      size="sm"
+                                      variant={isInstPaid ? 'secondary' : 'primary'}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setStatusExpenseToConfirm(expense);
+                                        setStatusInstallmentToConfirm(inst);
+                                      }}
+                                      className={`text-[11px] font-bold px-3 py-1.5 rounded-lg shrink-0 transition-all ${
+                                        isInstPaid
+                                          ? 'bg-slate-100 dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-200 dark:hover:bg-zinc-700 border border-slate-200 dark:border-zinc-700'
+                                          : 'bg-emerald-600 text-white hover:bg-emerald-500 shadow-xs'
+                                      }`}
+                                    >
+                                      {isInstPaid ? (
+                                        <>
+                                          <RotateCcw className="h-3 w-3 mr-1 text-slate-500 dark:text-zinc-400" />
+                                          <span>Reabrir</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <CheckCircle2 className="h-3 w-3 mr-1" />
+                                          <span>Pagar</span>
+                                        </>
+                                      )}
+                                    </Button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -398,9 +563,19 @@ export function ExpenseCategoryAccordion({
       {/* Confirmation Modal for Payment / Reopening */}
       <ExpenseStatusModal
         expense={statusExpenseToConfirm}
+        installment={statusInstallmentToConfirm}
         isOpen={!!statusExpenseToConfirm}
-        onClose={() => setStatusExpenseToConfirm(null)}
-        onConfirm={handleConfirmStatus}
+        onClose={() => {
+          setStatusExpenseToConfirm(null);
+          setStatusInstallmentToConfirm(null);
+        }}
+        onConfirm={(exp, inst) => {
+          if (inst) {
+            handleToggleInstallment(exp.id, inst);
+          } else {
+            handleConfirmStatus(exp);
+          }
+        }}
       />
     </div>
   );

@@ -26,6 +26,8 @@ export interface LancamentoBase {
   competencia: string;
   observacao?: string;
   faturaCartaoId?: string;
+  faturaCartaoCompetencia?: string;
+  faturaCartaoStatus?: string;
 }
 
 export interface Gasto {
@@ -53,6 +55,7 @@ export interface Gasto {
   recorrenciaPaiId?: string;
   dataInicioRecorrencia?: string;
   dataFimRecorrencia?: string;
+  lancamentosBase?: LancamentoBase[];
   createdAt: string;
   updatedAt: string;
 }
