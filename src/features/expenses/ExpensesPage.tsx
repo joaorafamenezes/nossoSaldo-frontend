@@ -23,7 +23,13 @@ export function ExpensesPage() {
 
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedType, setSelectedType] = React.useState('todos');
-  const [selectedStatus, setSelectedStatus] = React.useState('todos');
+  const [selectedStatus, setSelectedStatus] = React.useState<string>(() => {
+    try {
+      return localStorage.getItem('@NossoSaldo:defaultExpenseStatus') || 'todos';
+    } catch {
+      return 'todos';
+    }
+  });
   const [selectedCategoryId, setSelectedCategoryId] = React.useState('todos');
   const [selectedResponsavelId, setSelectedResponsavelId] = React.useState('todos');
   const [startDate, setStartDate] = React.useState('');

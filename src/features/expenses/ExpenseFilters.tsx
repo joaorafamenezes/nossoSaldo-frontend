@@ -11,7 +11,18 @@ import {
   CalendarRange,
   Clock,
   Filter,
+  Pin,
 } from 'lucide-react';
+import { toast } from 'sonner';
+
+export const DEFAULT_STATUS_STORAGE_KEY = '@NossoSaldo:defaultExpenseStatus';
+
+export const STATUS_LABELS: Record<string, string> = {
+  todos: 'Todos os Status',
+  pago: 'Pagos / Recebidos',
+  pendente: 'Pendentes',
+  atrasado: 'Atrasados',
+};
 
 export type PeriodPreset = 'all' | 'first_half' | 'second_half' | 'custom';
 
@@ -61,6 +72,25 @@ export function ExpenseFilters({
 
   const [year, month] = (selectedCompetencia || '2026-09').split('-');
   const lastDay = new Date(Number(year), Number(month), 0).getDate();
+
+  const [defaultStatus, setDefaultStatus] = React.useState<string>(() => {
+    try {
+      return localStorage.getItem(DEFAULT_STATUS_STORAGE_KEY) || 'todos';
+    } catch {
+      return 'todos';
+    }
+  });
+
+  const handleSetCurrentAsDefault = (e: React.MouseEvent) => {
+    e.preventDefault();
+    try {
+      localStorage.setItem(DEFAULT_STATUS_STORAGE_KEY, selectedStatus);
+      setDefaultStatus(selectedStatus);
+      toast.success(`Status padrão definido como "${STATUS_LABELS[selectedStatus] || selectedStatus}"!`);
+    } catch (err) {
+      console.error('Falha ao salvar preferência:', err);
+    }
+  };
 
   const handlePresetSelect = (preset: PeriodPreset) => {
     onPeriodPresetChange(preset);
@@ -153,17 +183,47 @@ export function ExpenseFilters({
             <option value="receita" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Somente Receitas</option>
           </select>
 
-          {/* Status filter */}
-          <select
-            value={selectedStatus}
-            onChange={(e) => onStatusChange(e.target.value)}
-            className="h-10 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none cursor-pointer focus:ring-1 focus:ring-emerald-500"
-          >
-            <option value="todos" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Todos os Status</option>
-            <option value="pago" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Pagos / Recebidos</option>
-            <option value="pendente" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Pendentes</option>
-            <option value="atrasado" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Atrasados</option>
-          </select>
+          {/* Status filter with default preference pin */}
+          <div className="flex items-center gap-1">
+            <select
+              value={selectedStatus}
+              onChange={(e) => onStatusChange(e.target.value)}
+              className="h-10 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none cursor-pointer focus:ring-1 focus:ring-emerald-500"
+            >
+              <option value="todos" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+                Todos os Status{defaultStatus === 'todos' ? ' (Padrão)' : ''}
+              </option>
+              <option value="pago" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+                Pagos / Recebidos{defaultStatus === 'pago' ? ' (Padrão)' : ''}
+              </option>
+              <option value="pendente" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+                Pendentes{defaultStatus === 'pendente' ? ' (Padrão)' : ''}
+              </option>
+              <option value="atrasado" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+                Atrasados{defaultStatus === 'atrasado' ? ' (Padrão)' : ''}
+              </option>
+            </select>
+
+            <button
+              type="button"
+              onClick={handleSetCurrentAsDefault}
+              className={`h-10 px-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1 shrink-0 ${
+                selectedStatus === defaultStatus
+                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-500 dark:text-amber-400'
+                  : 'border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-slate-400 dark:text-zinc-500 hover:text-amber-500 hover:border-amber-500/30'
+              }`}
+              title={
+                selectedStatus === defaultStatus
+                  ? `Status "${STATUS_LABELS[selectedStatus]}" está salvo como seu padrão inicial`
+                  : `Fixar "${STATUS_LABELS[selectedStatus]}" como status padrão ao abrir a tela de gastos`
+              }
+            >
+              <Pin className={`h-3.5 w-3.5 ${selectedStatus === defaultStatus ? 'fill-amber-400 text-amber-500' : ''}`} />
+              <span className="hidden sm:inline text-[10px]">
+                {selectedStatus === defaultStatus ? 'Padrão' : 'Fixar'}
+              </span>
+            </button>
+          </div>
 
           {/* Category filter */}
           <select

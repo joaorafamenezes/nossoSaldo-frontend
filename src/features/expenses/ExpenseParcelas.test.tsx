@@ -360,4 +360,35 @@ describe('Gestão de Gastos Parcelados & Critérios 001 e 002', () => {
       expect(screen.getByText('Smart TV OLED 55"')).toBeInTheDocument();
     });
   });
+
+  describe('História: Data de Criação vs Data de Vencimento no Card Principal', () => {
+    it('exibe "Criado em:" para gasto parcelado e "Vencimento:" para gasto à vista no ExpenseCategoryAccordion', () => {
+      render(
+        <ExpenseCategoryAccordion
+          expenses={[mockParceladoExpensePaidInSeptember, mockSingleExpense]}
+          selectedIds={[]}
+          onToggleSelect={vi.fn()}
+        />
+      );
+
+      // Gasto parcelado deve exibir "Criado em:"
+      expect(screen.getByText(/Criado em: 01\/09\/2026/i)).toBeInTheDocument();
+
+      // Gasto à vista deve exibir "Vencimento:"
+      expect(screen.getByText(/Vencimento: 12\/09\/2026/i)).toBeInTheDocument();
+    });
+
+    it('exibe "Criado:" para gasto parcelado e "Vence:" para gasto à vista no ExpenseGrid', () => {
+      render(
+        <ExpenseGrid
+          expenses={[mockParceladoExpensePaidInSeptember, mockSingleExpense]}
+          selectedIds={[]}
+          onToggleSelect={vi.fn()}
+        />
+      );
+
+      expect(screen.getByText(/Criado: 01\/09\/2026/i)).toBeInTheDocument();
+      expect(screen.getByText(/Vence: 12\/09\/2026/i)).toBeInTheDocument();
+    });
+  });
 });

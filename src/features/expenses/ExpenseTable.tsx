@@ -191,21 +191,29 @@ export function ExpenseTable({
                         <CategoryBadge categoria={category} size="sm" />
                       </td>
 
-                      {/* Due Date */}
+                      {/* Due Date or Created Date */}
                       <td className="p-4 font-mono text-zinc-400">
-                        <span>{formatDate(expense.dataVencimento)}</span>
-                        {!isPaid && daysDiff <= 3 && (
-                          <span
-                            className={`ml-1.5 text-[10px] font-bold ${
-                              daysDiff < 0
-                                ? 'text-rose-400'
-                                : daysDiff === 0
-                                ? 'text-amber-400'
-                                : 'text-amber-300'
-                            }`}
-                          >
-                            {daysDiff < 0 ? 'Atrasado' : daysDiff === 0 ? 'Hoje' : `${daysDiff}d`}
+                        {isParcelado ? (
+                          <span title="Data de criação do lançamento parcelado">
+                            {formatDate(expense.createdAt || expense.dataVencimento)}
                           </span>
+                        ) : (
+                          <>
+                            <span>{formatDate(expense.dataVencimento)}</span>
+                            {!isPaid && daysDiff <= 3 && (
+                              <span
+                                className={`ml-1.5 text-[10px] font-bold ${
+                                  daysDiff < 0
+                                    ? 'text-rose-400'
+                                    : daysDiff === 0
+                                    ? 'text-amber-400'
+                                    : 'text-amber-300'
+                                }`}
+                              >
+                                {daysDiff < 0 ? 'Atrasado' : daysDiff === 0 ? 'Hoje' : `${daysDiff}d`}
+                              </span>
+                            )}
+                          </>
                         )}
                       </td>
 

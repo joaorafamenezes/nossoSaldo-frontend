@@ -133,4 +133,22 @@ describe('ExpenseFilters - Quinzena & Período (Critério 001)', () => {
     expect(gastosSegundaQuinzena).toHaveLength(3);
     expect(gastosSegundaQuinzena.map((g) => g.descricao)).toEqual(['Academia', 'Energia', 'Cartão de Crédito']);
   });
+
+  it('permite fixar o status selecionado como padrão no localStorage (História: Status Default Configurável)', () => {
+    localStorage.clear();
+    const props = {
+      ...defaultProps,
+      selectedStatus: 'pendente',
+      onStatusChange: vi.fn(),
+    };
+    render(<ExpenseFilters {...props} />);
+
+    // Clica no botão de fixar padrão
+    const pinBtn = screen.getByTitle(/Fixar "Pendentes" como status padrão/i);
+    expect(pinBtn).toBeInTheDocument();
+
+    fireEvent.click(pinBtn);
+
+    expect(localStorage.getItem('@NossoSaldo:defaultExpenseStatus')).toBe('pendente');
+  });
 });

@@ -247,7 +247,11 @@ export function ExpenseGrid({
               {/* Bottom info & actions */}
               <div className="flex items-center justify-between pt-2 border-t border-zinc-800/80 text-[11px] text-zinc-400">
                 <div className="flex items-center gap-1.5 font-mono">
-                  <span>Vence: {formatDate(expense.dataVencimento)}</span>
+                  {isParcelado ? (
+                    <span title="Data de criação (vencimentos nas parcelas)">Criado: {formatDate(expense.createdAt || expense.dataVencimento)}</span>
+                  ) : (
+                    <span>Vence: {formatDate(expense.dataVencimento)}</span>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -18,6 +18,7 @@ import {
   CreditCard,
   User,
   Calendar,
+  Clock,
   RotateCcw,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -338,11 +339,21 @@ export function ExpenseCategoryAccordion({
                                 <span>Responsável: {expense.responsavelNome?.split(' ')[0] || 'Você'}</span>
                               </span>
 
-                              {/* Vencimento */}
-                              <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1 text-[11px] text-slate-600 dark:text-zinc-400 font-mono shadow-xs">
-                                <Calendar className="h-3 w-3 text-slate-400 dark:text-zinc-500" />
-                                <span>Vencimento: {formatDate(expense.dataVencimento)}</span>
-                              </span>
+                              {/* Vencimento ou Data de Criação (se parcelado) */}
+                              {expense.origemLancamento === 'parcelado' || (expense.lancamentosBase && expense.lancamentosBase.length > 0) ? (
+                                <span
+                                  className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1 text-[11px] text-slate-600 dark:text-zinc-400 font-mono shadow-xs"
+                                  title="Data de criação do lançamento parcelado (vencimentos controlados nas parcelas filhas)"
+                                >
+                                  <Clock className="h-3 w-3 text-indigo-500 dark:text-indigo-400" />
+                                  <span>Criado em: {formatDate(expense.createdAt || expense.dataVencimento)}</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1 text-[11px] text-slate-600 dark:text-zinc-400 font-mono shadow-xs">
+                                  <Calendar className="h-3 w-3 text-slate-400 dark:text-zinc-500" />
+                                  <span>Vencimento: {formatDate(expense.dataVencimento)}</span>
+                                </span>
+                              )}
 
                               {/* Data de pagamento (se pago) */}
                               {isPaid && expense.dataPagamento && (
