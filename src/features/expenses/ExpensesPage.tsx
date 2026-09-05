@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useAppStore } from '../../stores/useAppStore';
-import { ExpenseFilters } from './ExpenseFilters';
+import { ExpenseFilters, PeriodPreset } from './ExpenseFilters';
 import { ExpenseCategoryAccordion } from './ExpenseCategoryAccordion';
 import { ExpenseTable } from './ExpenseTable';
 import { ExpenseGrid } from './ExpenseGrid';
@@ -26,13 +26,27 @@ export function ExpensesPage() {
   const [selectedStatus, setSelectedStatus] = React.useState('todos');
   const [selectedCategoryId, setSelectedCategoryId] = React.useState('todos');
   const [selectedResponsavelId, setSelectedResponsavelId] = React.useState('todos');
+  const [startDate, setStartDate] = React.useState('');
+  const [endDate, setEndDate] = React.useState('');
+  const [periodPreset, setPeriodPreset] = React.useState<PeriodPreset>('all');
   const [viewMode, setViewMode] = React.useState<'category' | 'table' | 'grid'>('category');
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
 
-  // Filter expenses strictly by selected competence, search and joint account responsible
+  // Filter expenses strictly by selected competence / date range, search and joint account responsible
   const filteredExpenses = React.useMemo(() => {
     return expenses.filter((item) => {
-      if (!item.competencia.startsWith(selectedCompetencia)) return false;
+      // Date period filtering (vencimento)
+      if (startDate || endDate) {
+        const vencimentoStr = item.dataVencimento ? item.dataVencimento.split('T')[0] : '';
+        if (startDate && (!vencimentoStr || vencimentoStr < startDate)) {
+          return false;
+        }
+        if (endDate && (!vencimentoStr || vencimentoStr > endDate)) {
+          return false;
+        }
+      } else {
+        if (!item.competencia.startsWith(selectedCompetencia)) return false;
+      }
 
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
@@ -56,7 +70,7 @@ export function ExpensesPage() {
 
       return true;
     });
-  }, [expenses, jointInfo, selectedCompetencia, searchQuery, selectedType, selectedStatus, selectedCategoryId, selectedResponsavelId]);
+  }, [expenses, jointInfo, selectedCompetencia, startDate, endDate, searchQuery, selectedType, selectedStatus, selectedCategoryId, selectedResponsavelId]);
 
   const handleToggleSelect = (id: string) => {
     setSelectedIds((prev) =>
@@ -123,9 +137,58 @@ export function ExpensesPage() {
         onCategoryChange={setSelectedCategoryId}
         selectedResponsavelId={selectedResponsavelId}
         onResponsavelChange={setSelectedResponsavelId}
+        startDate={startDate}
+        onStartDateChange={setStartDate}
+        endDate={endDate}
+        onEndDateChange={setEndDate}
+        periodPreset={periodPreset}
+        onPeriodPresetChange={setPeriodPreset}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
       />
+
+      {/* Active Period Feedback Banner */}
+      {(periodPreset !== 'all' || !!startDate || !!endDate) && (
+        <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-500/20 text-emerald-900 dark:text-emerald-200 text-xs shadow-xs">
+          <div className="flex items-center gap-2">
+            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+            <span>
+              Filtrando por período de vencimento:{' '}
+              <strong className="font-mono">
+                {startDate ? startDate.split('-').reverse().join('/') : 'Início'}
+              </strong>{' '}
+              até{' '}
+              <strong className="font-mono">
+                {endDate ? endDate.split('-').reverse().join('/') : 'Fim'}
+              </strong>
+              {periodPreset === 'first_half' && ' (1ª Quinzena)'}
+              {periodPreset === 'second_half' && ' (2ª Quinzena)'}
+            </span>
+          </div>
+          <div className="flex items-center gap-4 text-xs">
+            <span>
+              Total de despesas no período:{' '}
+              <strong className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                  filteredExpenses
+                    .filter((e) => e.tipo === 'despesa')
+                    .reduce((acc, curr) => acc + curr.valor, 0)
+                )}
+              </strong>
+            </span>
+            <button
+              onClick={() => {
+                setPeriodPreset('all');
+                setStartDate('');
+                setEndDate('');
+              }}
+              className="text-emerald-700 dark:text-emerald-400 hover:underline font-semibold"
+            >
+              Ver mês completo
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Content View: Category Accordion vs Table vs Grid */}
       {viewMode === 'category' ? (
