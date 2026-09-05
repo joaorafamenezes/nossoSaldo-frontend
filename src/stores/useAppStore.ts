@@ -69,6 +69,7 @@ interface AppState {
   updateExpense: (id: string, updates: Partial<Gasto>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   toggleExpenseStatus: (id: string) => Promise<void>;
+  toggleInstallmentStatus: (gastoId: string, installmentId: string) => Promise<void>;
   batchToggleStatus: (ids: string[], targetStatus: StatusGasto) => Promise<void>;
   batchDeleteExpenses: (ids: string[]) => Promise<void>;
 
@@ -125,6 +126,36 @@ function normalizeGastoFromApi(gasto: any, categories: Categoria[], cards: Carta
   const card = cards.find((c) => c.id === gasto.cartaoCreditoId);
   const cat = categories.find((c) => c.id === gasto.categoriaId);
 
+  const normalizedLancamentos = Array.isArray(gasto.lancamentosBase)
+    ? gasto.lancamentosBase.map((lb: any) => ({
+        id: lb.id,
+        gastoId: lb.gastoId || gasto.id,
+        descricao: lb.descricao,
+        valorParcela: Number(lb.valorParcela),
+        numeroParcela: Number(lb.numeroParcela),
+        dataVencimentoParcela: lb.dataVencimentoParcela
+          ? (typeof lb.dataVencimentoParcela === 'string'
+              ? lb.dataVencimentoParcela.split('T')[0]
+              : new Date(lb.dataVencimentoParcela).toISOString().split('T')[0])
+          : '',
+        dataPagamentoParcela: lb.dataPagamentoParcela
+          ? (typeof lb.dataPagamentoParcela === 'string'
+              ? lb.dataPagamentoParcela.split('T')[0]
+              : new Date(lb.dataPagamentoParcela).toISOString().split('T')[0])
+          : undefined,
+        status: (lb.status || 'pendente') as StatusGasto,
+        competencia: lb.competencia
+          ? (typeof lb.competencia === 'string'
+              ? lb.competencia.split('T')[0]
+              : new Date(lb.competencia).toISOString().split('T')[0])
+          : '',
+        observacao: lb.observacao || '',
+        faturaCartaoId: lb.faturaCartaoId || undefined,
+        faturaCartaoCompetencia: lb.faturaCartaoCompetencia || lb.faturaCartao?.competencia,
+        faturaCartaoStatus: lb.faturaCartaoStatus || lb.faturaCartao?.status,
+      }))
+    : undefined;
+
   return {
     id: gasto.id,
     descricao: gasto.descricao,
@@ -146,6 +177,7 @@ function normalizeGastoFromApi(gasto: any, categories: Categoria[], cards: Carta
     cartaoCreditoId: gasto.cartaoCreditoId || undefined,
     cartaoNome: gasto.cartaoCreditoDescricao || gasto.cartaoCredito?.descricao || card?.descricao,
     faturaCartaoId: gasto.faturaCartaoId || undefined,
+    lancamentosBase: normalizedLancamentos,
     createdAt: gasto.createdAt ? new Date(gasto.createdAt).toISOString() : new Date().toISOString(),
     updatedAt: gasto.updatedAt ? new Date(gasto.updatedAt).toISOString() : new Date().toISOString(),
   };
@@ -561,33 +593,42 @@ export const useAppStore = create<AppState>((set, get) => ({
       await api.createExpense(token, payload);
       await get().loadApiData(token);
     } else {
-      const newItems: Gasto[] = [];
       const baseDate = new Date(baseExpense.dataVencimento + 'T00:00:00');
       const now = new Date().toISOString();
+      const parentId = `gst-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
 
-      for (let i = 1; i <= totalParcelas; i++) {
+      const childInstallments = Array.from({ length: totalParcelas }, (_, index) => {
+        const num = index + 1;
         const dueDate = new Date(baseDate);
-        dueDate.setMonth(baseDate.getMonth() + (i - 1));
+        dueDate.setMonth(baseDate.getMonth() + index);
         const dueStr = dueDate.toISOString().split('T')[0];
         const compStr = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-01`;
 
-        newItems.push({
-          ...baseExpense,
-          id: `gst-inst-${Date.now()}-${i}`,
-          descricao: `${baseExpense.descricao} (${i}/${totalParcelas})`,
-          valor: valorPorParcela,
-          origemLancamento: 'parcelado',
-          numeroParcelas: totalParcelas,
-          parcelaAtual: i,
-          dataVencimento: dueStr,
+        return {
+          id: `lb-${parentId}-${num}`,
+          gastoId: parentId,
+          descricao: `${baseExpense.descricao} - parcela ${num}/${totalParcelas}`,
+          valorParcela: valorPorParcela,
+          numeroParcela: num,
+          dataVencimentoParcela: dueStr,
+          status: 'pendente' as StatusGasto,
           competencia: compStr,
-          status: 'pendente',
-          createdAt: now,
-          updatedAt: now,
-        });
-      }
+        };
+      });
 
-      set((state) => ({ expenses: [...newItems, ...state.expenses] }));
+      const newParentExpense: Gasto = {
+        ...baseExpense,
+        id: parentId,
+        origemLancamento: 'parcelado',
+        numeroParcelas: totalParcelas,
+        parcelaAtual: 1,
+        status: 'pendente',
+        lancamentosBase: childInstallments,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      set((state) => ({ expenses: [newParentExpense, ...state.expenses] }));
     }
   },
 
@@ -657,6 +698,51 @@ export const useAppStore = create<AppState>((set, get) => ({
             : e
         ),
       }));
+    }
+  },
+
+  toggleInstallmentStatus: async (gastoId: string, installmentId: string) => {
+    const expense = get().expenses.find((e) => e.id === gastoId);
+    const installment = expense?.lancamentosBase?.find((lb) => lb.id === installmentId);
+    const nextStatus: StatusGasto = installment?.status === 'pago' ? 'pendente' : 'pago';
+    const now = new Date().toISOString().split('T')[0];
+
+    // Optimistically update local state
+    set((state) => ({
+      expenses: state.expenses.map((e) => {
+        if (e.id !== gastoId) return e;
+        const updatedLancamentos = (e.lancamentosBase || []).map((lb) => {
+          if (lb.id !== installmentId) return lb;
+          return {
+            ...lb,
+            status: nextStatus,
+            dataPagamentoParcela: nextStatus === 'pago' ? now : undefined,
+          };
+        });
+        const allPaid = updatedLancamentos.length > 0 && updatedLancamentos.every((lb) => lb.status === 'pago');
+        return {
+          ...e,
+          status: allPaid ? 'pago' : 'pendente',
+          dataPagamento: allPaid ? now : undefined,
+          lancamentosBase: updatedLancamentos,
+          updatedAt: new Date().toISOString(),
+        };
+      }),
+    }));
+
+    const token = localStorage.getItem('@NossoSaldo:token');
+    if (token) {
+      try {
+        if (nextStatus === 'pago') {
+          await api.payInstallment(token, installmentId, { dataPagamento: new Date().toISOString() });
+        } else {
+          await api.reopenInstallment(token, installmentId);
+        }
+        await get().loadApiData(token);
+      } catch (err) {
+        console.error('Erro ao atualizar status da parcela na API:', err);
+        await get().loadApiData(token);
+      }
     }
   },
 

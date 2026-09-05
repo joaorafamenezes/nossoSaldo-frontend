@@ -192,6 +192,26 @@ export const INITIAL_EXPENSES: Gasto[] = [
     responsavelNome: 'João Ricardo',
     cartaoCreditoId: 'crd-1',
     cartaoNome: 'Nubank Ultravioleta',
+    lancamentosBase: Array.from({ length: 10 }, (_, i) => {
+      const num = i + 1;
+      const monthNum = (i + 6);
+      const yearStr = monthNum > 12 ? '2027' : '2026';
+      const normMonth = monthNum > 12 ? String(monthNum - 12).padStart(2, '0') : String(monthNum).padStart(2, '0');
+      const isPaid = num < 3;
+      return {
+        id: `lb-4-${num}`,
+        gastoId: 'gst-4',
+        descricao: `Smart TV OLED 55" Sala - parcela ${num}/10`,
+        numeroParcela: num,
+        valorParcela: 489.90,
+        dataVencimentoParcela: `${yearStr}-${normMonth}-28`,
+        dataPagamentoParcela: isPaid ? `${yearStr}-${normMonth}-26` : undefined,
+        status: (isPaid ? 'pago' : 'pendente') as any,
+        competencia: `${yearStr}-${normMonth}-01`,
+        faturaCartaoCompetencia: `${yearStr}-${normMonth}`,
+        faturaCartaoStatus: isPaid ? 'paga' : 'aberta',
+      };
+    }),
     createdAt: '2026-06-10T12:00:00.000Z',
     updatedAt: '2026-08-01T10:00:00.000Z',
   },
