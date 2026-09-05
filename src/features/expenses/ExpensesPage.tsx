@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { useAppStore } from '../../stores/useAppStore';
-import { ExpenseFilters, PeriodPreset } from './ExpenseFilters';
+import { ExpenseFilters, PeriodPreset, getDefaultFilters } from './ExpenseFilters';
 import { ExpenseCategoryAccordion } from './ExpenseCategoryAccordion';
 import { ExpenseTable } from './ExpenseTable';
 import { ExpenseGrid } from './ExpenseGrid';
@@ -9,6 +9,7 @@ import { BatchActionsBar } from './BatchActionsBar';
 import { Button } from '../../components/ui/Button';
 import { PlusCircle, Receipt } from 'lucide-react';
 import { StatusGasto } from '../../types/financial';
+import { getEffectiveExpenseValue } from '../../lib/utils';
 import { toast } from 'sonner';
 
 export function ExpensesPage() {
@@ -21,17 +22,13 @@ export function ExpensesPage() {
     batchDeleteExpenses,
   } = useAppStore();
 
+  const initialDefaults = React.useMemo(() => getDefaultFilters(), []);
+
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [selectedType, setSelectedType] = React.useState('todos');
-  const [selectedStatus, setSelectedStatus] = React.useState<string>(() => {
-    try {
-      return localStorage.getItem('@NossoSaldo:defaultExpenseStatus') || 'todos';
-    } catch {
-      return 'todos';
-    }
-  });
-  const [selectedCategoryId, setSelectedCategoryId] = React.useState('todos');
-  const [selectedResponsavelId, setSelectedResponsavelId] = React.useState('todos');
+  const [selectedType, setSelectedType] = React.useState(initialDefaults.selectedType);
+  const [selectedStatus, setSelectedStatus] = React.useState(initialDefaults.selectedStatus);
+  const [selectedCategoryId, setSelectedCategoryId] = React.useState(initialDefaults.selectedCategoryId);
+  const [selectedResponsavelId, setSelectedResponsavelId] = React.useState(initialDefaults.selectedResponsavelId);
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [periodPreset, setPeriodPreset] = React.useState<PeriodPreset>('all');
@@ -221,7 +218,7 @@ export function ExpensesPage() {
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                   filteredExpenses
                     .filter((e) => e.tipo === 'despesa')
-                    .reduce((acc, curr) => acc + curr.valor, 0)
+                    .reduce((acc, curr) => acc + getEffectiveExpenseValue(curr, selectedCompetencia, startDate, endDate), 0)
                 )}
               </strong>
             </span>

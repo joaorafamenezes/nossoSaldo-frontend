@@ -15,6 +15,7 @@ import {
   INITIAL_AI_MESSAGES,
   INITIAL_JOINT_INFO,
 } from '../data/initialMockData';
+import { getEffectiveExpenseValue } from '../lib/utils';
 import * as api from '../services/api';
 
 export type NavigationTab = 'dashboard' | 'expenses' | 'cards' | 'supermarket' | 'categories' | 'ai' | 'joint';
@@ -478,7 +479,20 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   getResumoCompetencia: () => {
     const { expenses, selectedCompetencia } = get();
-    const filtered = expenses.filter((g) => g.competencia.startsWith(selectedCompetencia));
+    const filtered = expenses.filter((g) => {
+      if (g.lancamentosBase && g.lancamentosBase.length > 0) {
+        return g.lancamentosBase.some(
+          (lb) =>
+            (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
+            (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia)) ||
+            (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(selectedCompetencia))
+        );
+      }
+      return (
+        g.competencia.startsWith(selectedCompetencia) ||
+        (g.dataVencimento && g.dataVencimento.startsWith(selectedCompetencia))
+      );
+    });
 
     let receitasTotal = 0;
     let receitasRecebidas = 0;
@@ -491,18 +505,31 @@ export const useAppStore = create<AppState>((set, get) => ({
     const todayStr = new Date().toISOString().split('T')[0];
 
     filtered.forEach((item) => {
+      const val = getEffectiveExpenseValue(item, selectedCompetencia);
+      let relevantInstallment = undefined;
+      if (item.lancamentosBase && item.lancamentosBase.length > 0) {
+        relevantInstallment = item.lancamentosBase.find(
+          (lb) =>
+            (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
+            (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia)) ||
+            (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(selectedCompetencia))
+        );
+      }
+      const effectiveStatus = relevantInstallment ? relevantInstallment.status : item.status;
+      const effectiveDue = relevantInstallment ? relevantInstallment.dataVencimentoParcela : item.dataVencimento;
+
       if (item.tipo === 'receita') {
-        receitasTotal += item.valor;
-        if (item.status === 'pago') receitasRecebidas += item.valor;
-        else receitasPendentes += item.valor;
+        receitasTotal += val;
+        if (effectiveStatus === 'pago') receitasRecebidas += val;
+        else receitasPendentes += val;
       } else {
-        despesasTotal += item.valor;
-        if (item.status === 'pago') {
-          despesasPagas += item.valor;
-        } else if (item.dataVencimento && item.dataVencimento < todayStr) {
-          despesasAtrasadas += item.valor;
+        despesasTotal += val;
+        if (effectiveStatus === 'pago') {
+          despesasPagas += val;
+        } else if (effectiveDue && effectiveDue < todayStr) {
+          despesasAtrasadas += val;
         } else {
-          despesasPendentes += item.valor;
+          despesasPendentes += val;
         }
       }
     });

@@ -15,7 +15,38 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+export const DEFAULT_FILTERS_STORAGE_KEY = '@NossoSaldo:defaultExpenseFilters';
 export const DEFAULT_STATUS_STORAGE_KEY = '@NossoSaldo:defaultExpenseStatus';
+
+export interface DefaultExpenseFilters {
+  selectedType: string;
+  selectedStatus: string;
+  selectedCategoryId: string;
+  selectedResponsavelId: string;
+}
+
+export const getDefaultFilters = (): DefaultExpenseFilters => {
+  try {
+    const raw = localStorage.getItem(DEFAULT_FILTERS_STORAGE_KEY);
+    if (raw) {
+      return JSON.parse(raw);
+    }
+    const legacyStatus = localStorage.getItem(DEFAULT_STATUS_STORAGE_KEY);
+    return {
+      selectedType: 'todos',
+      selectedStatus: legacyStatus || 'todos',
+      selectedCategoryId: 'todos',
+      selectedResponsavelId: 'todos',
+    };
+  } catch {
+    return {
+      selectedType: 'todos',
+      selectedStatus: 'todos',
+      selectedCategoryId: 'todos',
+      selectedResponsavelId: 'todos',
+    };
+  }
+};
 
 export const STATUS_LABELS: Record<string, string> = {
   todos: 'Todos os Status',
@@ -73,22 +104,29 @@ export function ExpenseFilters({
   const [year, month] = (selectedCompetencia || '2026-09').split('-');
   const lastDay = new Date(Number(year), Number(month), 0).getDate();
 
-  const [defaultStatus, setDefaultStatus] = React.useState<string>(() => {
-    try {
-      return localStorage.getItem(DEFAULT_STATUS_STORAGE_KEY) || 'todos';
-    } catch {
-      return 'todos';
-    }
-  });
+  const [savedDefaults, setSavedDefaults] = React.useState<DefaultExpenseFilters>(() => getDefaultFilters());
 
-  const handleSetCurrentAsDefault = (e: React.MouseEvent) => {
+  const isCurrentSavedAsDefault =
+    savedDefaults.selectedType === selectedType &&
+    savedDefaults.selectedStatus === selectedStatus &&
+    savedDefaults.selectedCategoryId === selectedCategoryId &&
+    savedDefaults.selectedResponsavelId === selectedResponsavelId;
+
+  const handleSaveAllAsDefault = (e: React.MouseEvent) => {
     e.preventDefault();
     try {
+      const newDefaults: DefaultExpenseFilters = {
+        selectedType,
+        selectedStatus,
+        selectedCategoryId,
+        selectedResponsavelId,
+      };
+      localStorage.setItem(DEFAULT_FILTERS_STORAGE_KEY, JSON.stringify(newDefaults));
       localStorage.setItem(DEFAULT_STATUS_STORAGE_KEY, selectedStatus);
-      setDefaultStatus(selectedStatus);
-      toast.success(`Status padrão definido como "${STATUS_LABELS[selectedStatus] || selectedStatus}"!`);
+      setSavedDefaults(newDefaults);
+      toast.success('Filtros padrão salvos com sucesso!');
     } catch (err) {
-      console.error('Falha ao salvar preferência:', err);
+      console.error('Falha ao salvar preferências de filtros:', err);
     }
   };
 
@@ -124,7 +162,7 @@ export function ExpenseFilters({
 
   return (
     <div className="space-y-2.5">
-      {/* Main Filter Row: Search, Type, Status, Category, View Mode */}
+      {/* Main Filter Row: Search, Type, Status, Category, Pin Default, View Mode */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white/80 dark:bg-zinc-900/60 p-3 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xs backdrop-blur-md">
         {/* Search Input */}
         <div className="relative flex-1 max-w-md">
@@ -183,47 +221,17 @@ export function ExpenseFilters({
             <option value="receita" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Somente Receitas</option>
           </select>
 
-          {/* Status filter with default preference pin */}
-          <div className="flex items-center gap-1">
-            <select
-              value={selectedStatus}
-              onChange={(e) => onStatusChange(e.target.value)}
-              className="h-10 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none cursor-pointer focus:ring-1 focus:ring-emerald-500"
-            >
-              <option value="todos" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
-                Todos os Status{defaultStatus === 'todos' ? ' (Padrão)' : ''}
-              </option>
-              <option value="pago" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
-                Pagos / Recebidos{defaultStatus === 'pago' ? ' (Padrão)' : ''}
-              </option>
-              <option value="pendente" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
-                Pendentes{defaultStatus === 'pendente' ? ' (Padrão)' : ''}
-              </option>
-              <option value="atrasado" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
-                Atrasados{defaultStatus === 'atrasado' ? ' (Padrão)' : ''}
-              </option>
-            </select>
-
-            <button
-              type="button"
-              onClick={handleSetCurrentAsDefault}
-              className={`h-10 px-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1 shrink-0 ${
-                selectedStatus === defaultStatus
-                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-500 dark:text-amber-400'
-                  : 'border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-slate-400 dark:text-zinc-500 hover:text-amber-500 hover:border-amber-500/30'
-              }`}
-              title={
-                selectedStatus === defaultStatus
-                  ? `Status "${STATUS_LABELS[selectedStatus]}" está salvo como seu padrão inicial`
-                  : `Fixar "${STATUS_LABELS[selectedStatus]}" como status padrão ao abrir a tela de gastos`
-              }
-            >
-              <Pin className={`h-3.5 w-3.5 ${selectedStatus === defaultStatus ? 'fill-amber-400 text-amber-500' : ''}`} />
-              <span className="hidden sm:inline text-[10px]">
-                {selectedStatus === defaultStatus ? 'Padrão' : 'Fixar'}
-              </span>
-            </button>
-          </div>
+          {/* Status filter */}
+          <select
+            value={selectedStatus}
+            onChange={(e) => onStatusChange(e.target.value)}
+            className="h-10 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none cursor-pointer focus:ring-1 focus:ring-emerald-500"
+          >
+            <option value="todos" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Todos os Status</option>
+            <option value="pago" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Pagos / Recebidos</option>
+            <option value="pendente" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Pendentes</option>
+            <option value="atrasado" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Atrasados</option>
+          </select>
 
           {/* Category filter */}
           <select
@@ -238,6 +246,27 @@ export function ExpenseFilters({
               </option>
             ))}
           </select>
+
+          {/* Unified Pin Button - Salvar Filtros como Padrão */}
+          <button
+            type="button"
+            onClick={handleSaveAllAsDefault}
+            className={`h-10 px-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1 shrink-0 ${
+              isCurrentSavedAsDefault
+                ? 'border-amber-500/40 bg-amber-500/10 text-amber-500 dark:text-amber-400 shadow-xs'
+                : 'border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-slate-400 dark:text-zinc-500 hover:text-amber-500 hover:border-amber-500/30'
+            }`}
+            title={
+              isCurrentSavedAsDefault
+                ? 'Filtros atuais estão salvos como padrão inicial'
+                : 'Fixar filtros atuais (Responsável, Tipo, Status e Categoria) como padrão ao abrir a tela'
+            }
+          >
+            <Pin className={`h-3.5 w-3.5 ${isCurrentSavedAsDefault ? 'fill-amber-400 text-amber-500' : ''}`} />
+            <span className="hidden sm:inline text-[11px]">
+              {isCurrentSavedAsDefault ? 'Padrão Salvo' : 'Fixar Padrão'}
+            </span>
+          </button>
 
           {/* View Mode Toggle */}
           <div className="flex rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-950 p-1">

@@ -6,7 +6,7 @@ import { ExpenseStatusModal } from './ExpenseStatusModal';
 import { MoneyDisplay } from '../../components/common/MoneyDisplay';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { formatDate, formatCurrency, getDaysDifference } from '../../lib/utils';
+import { formatDate, formatCurrency, getDaysDifference, getEffectiveExpenseValue } from '../../lib/utils';
 import {
   CheckCircle2,
   Clock,
@@ -37,7 +37,7 @@ export function ExpenseTable({
   onToggleSelect,
   onSelectAll,
 }: ExpenseTableProps) {
-  const { categories, toggleExpenseStatus, toggleInstallmentStatus, openEditExpense, deleteExpense } = useAppStore();
+  const { categories, selectedCompetencia, toggleExpenseStatus, toggleInstallmentStatus, openEditExpense, deleteExpense } = useAppStore();
   const [statusExpenseToConfirm, setStatusExpenseToConfirm] = React.useState<Gasto | null>(null);
   const [statusInstallmentToConfirm, setStatusInstallmentToConfirm] = React.useState<any | null>(null);
   const [expandedParcelas, setExpandedParcelas] = React.useState<Record<string, boolean>>({});
@@ -252,10 +252,18 @@ export function ExpenseTable({
                       {/* Value */}
                       <td className="p-4 text-right">
                         <MoneyDisplay
-                          value={expense.valor}
+                          value={getEffectiveExpenseValue(expense, selectedCompetencia)}
                           type={expense.tipo === 'receita' ? 'positive' : 'negative'}
                           size="sm"
                         />
+                        {isParcelado && (
+                          <span
+                            className="text-[10px] font-mono text-zinc-500 block"
+                            title={`Valor total do parcelamento: ${formatCurrency(expense.valor)}`}
+                          >
+                            Total: {formatCurrency(expense.valor)} ({expense.numeroParcelas || expense.lancamentosBase?.length || 1}x)
+                          </span>
+                        )}
                       </td>
 
                       {/* Actions */}

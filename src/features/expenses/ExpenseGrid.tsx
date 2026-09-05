@@ -6,7 +6,7 @@ import { ExpenseStatusModal } from './ExpenseStatusModal';
 import { MoneyDisplay } from '../../components/common/MoneyDisplay';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { formatDate, formatCurrency, getDaysDifference } from '../../lib/utils';
+import { formatDate, formatCurrency, getDaysDifference, getEffectiveExpenseValue } from '../../lib/utils';
 import {
   CheckCircle2,
   Clock,
@@ -32,7 +32,7 @@ export function ExpenseGrid({
   selectedIds,
   onToggleSelect,
 }: ExpenseGridProps) {
-  const { categories, toggleExpenseStatus, toggleInstallmentStatus, openEditExpense, deleteExpense } = useAppStore();
+  const { categories, selectedCompetencia, toggleExpenseStatus, toggleInstallmentStatus, openEditExpense, deleteExpense } = useAppStore();
   const [statusExpenseToConfirm, setStatusExpenseToConfirm] = React.useState<Gasto | null>(null);
   const [statusInstallmentToConfirm, setStatusInstallmentToConfirm] = React.useState<any | null>(null);
   const [expandedParcelas, setExpandedParcelas] = React.useState<Record<string, boolean>>({});
@@ -164,11 +164,21 @@ export function ExpenseGrid({
                 </div>
 
                 <div className="mt-2 flex items-baseline justify-between">
-                  <MoneyDisplay
-                    value={expense.valor}
-                    type={expense.tipo === 'receita' ? 'positive' : 'negative'}
-                    size="xl"
-                  />
+                  <div>
+                    <MoneyDisplay
+                      value={getEffectiveExpenseValue(expense, selectedCompetencia)}
+                      type={expense.tipo === 'receita' ? 'positive' : 'negative'}
+                      size="xl"
+                    />
+                    {isParcelado && (
+                      <span
+                        className="text-[10px] font-mono text-zinc-500 block"
+                        title={`Valor total do parcelamento: ${formatCurrency(expense.valor)}`}
+                      >
+                        Total: {formatCurrency(expense.valor)} ({expense.numeroParcelas || expense.lancamentosBase?.length || 1}x)
+                      </span>
+                    )}
+                  </div>
                   {expense.cartaoNome && (
                     <span className="text-[11px] text-purple-400 font-mono truncate max-w-[120px]">
                       💳 {expense.cartaoNome}
