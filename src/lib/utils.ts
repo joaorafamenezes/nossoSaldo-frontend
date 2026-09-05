@@ -132,3 +132,95 @@ export function getEffectiveExpenseValue(
   return expense.valor || 0;
 }
 
+export interface EffectiveExpenseStatus {
+  effectiveStatus: 'pendente' | 'pago' | 'atrasado' | 'cancelado';
+  effectiveDueDate: string;
+  isPaid: boolean;
+  isOverdue: boolean;
+  daysDiff: number;
+}
+
+/**
+ * Retorna o status efetivo, data de vencimento efetiva e indicador de atraso para o mês/período.
+ * Evita que gastos parcelados com parcela do mês já paga ou com vencimento futuro sejam marcados indevidamente como ATRASADOS
+ * devido à data de vencimento da primeira parcela do contrato no registro pai.
+ */
+export function getEffectiveExpenseStatus(
+  expense: {
+    status: 'pendente' | 'pago' | 'atrasado' | 'cancelado' | string;
+    dataVencimento: string;
+    origemLancamento?: string;
+    lancamentosBase?: Array<{
+      status: 'pendente' | 'pago' | 'atrasado' | 'cancelado' | string;
+      dataVencimentoParcela?: string;
+      competencia?: string;
+      faturaCartaoCompetencia?: string;
+    }>;
+  },
+  selectedCompetencia?: string,
+  startDate?: string,
+  endDate?: string
+): EffectiveExpenseStatus {
+  if (!expense) {
+    return {
+      effectiveStatus: 'pendente',
+      effectiveDueDate: '',
+      isPaid: false,
+      isOverdue: false,
+      daysDiff: 0,
+    };
+  }
+
+  let relevantInstallment:
+    | {
+        status: 'pendente' | 'pago' | 'atrasado' | 'cancelado' | string;
+        dataVencimentoParcela?: string;
+        competencia?: string;
+        faturaCartaoCompetencia?: string;
+      }
+    | undefined = undefined;
+
+  if (expense.lancamentosBase && expense.lancamentosBase.length > 0) {
+    if (startDate || endDate) {
+      relevantInstallment = expense.lancamentosBase.find((lb) => {
+        const d = lb.dataVencimentoParcela ? lb.dataVencimentoParcela.split('T')[0] : '';
+        return (!startDate || d >= startDate) && (!endDate || d <= endDate);
+      });
+    } else if (selectedCompetencia) {
+      relevantInstallment = expense.lancamentosBase.find(
+        (lb) =>
+          (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
+          (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia)) ||
+          (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(selectedCompetencia))
+      );
+    }
+
+    if (!relevantInstallment) {
+      // Se não encontrou para a competência selecionada, busca a primeira parcela pendente
+      const nextPending = expense.lancamentosBase.find((lb) => lb.status !== 'pago');
+      if (nextPending) {
+        relevantInstallment = nextPending;
+      } else {
+        // Se todas as parcelas foram quitadas
+        relevantInstallment = expense.lancamentosBase[expense.lancamentosBase.length - 1];
+      }
+    }
+  }
+
+  const rawStatus = relevantInstallment ? relevantInstallment.status : expense.status;
+  const effectiveStatus = (rawStatus || 'pendente') as 'pendente' | 'pago' | 'atrasado' | 'cancelado';
+  const effectiveDueDate = (relevantInstallment?.dataVencimentoParcela || expense.dataVencimento || '').split('T')[0];
+  const isPaid = effectiveStatus === 'pago';
+  const daysDiff = effectiveDueDate ? getDaysDifference(effectiveDueDate) : 0;
+  const isOverdue = !isPaid && daysDiff < 0;
+
+  return {
+    effectiveStatus: isOverdue ? 'atrasado' : effectiveStatus,
+    effectiveDueDate,
+    isPaid,
+    isOverdue,
+    daysDiff,
+  };
+}
+
+

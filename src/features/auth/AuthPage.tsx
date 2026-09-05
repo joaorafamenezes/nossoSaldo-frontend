@@ -42,9 +42,17 @@ export function AuthPage() {
 
   return (
     <div className="min-h-screen w-full bg-zinc-950 flex items-center justify-center p-4 select-none relative overflow-hidden">
+      {/* Background Hero Image with Dual Harmony & Glassmorphism theme */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-50 pointer-events-none scale-105 transform transition-transform duration-1000"
+        style={{ backgroundImage: `url('/nossosaldo-auth-bg.jpg')` }}
+      />
+      {/* Dark gradient mesh overlay for optimum contrast and glassmorphism focus */}
+      <div className="absolute inset-0 bg-gradient-to-b from-zinc-950/80 via-zinc-950/50 to-zinc-950/90 pointer-events-none" />
+
       {/* Ambient background glows */}
-      <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-40 -left-40 w-96 h-96 bg-emerald-600/15 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -bottom-40 -right-40 w-96 h-96 bg-indigo-600/15 rounded-full blur-3xl pointer-events-none" />
 
       <div className="w-full max-w-md space-y-6 relative z-10">
         {/* Brand Logo & Headline */}

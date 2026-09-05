@@ -51,8 +51,8 @@ export const getDefaultFilters = (): DefaultExpenseFilters => {
 export const STATUS_LABELS: Record<string, string> = {
   todos: 'Todos os Status',
   pago: 'Pagos / Recebidos',
-  pendente: 'Pendentes',
-  atrasado: 'Atrasados',
+  pendente: 'Pendentes / Atrasados',
+  atrasado: 'Apenas Atrasados',
 };
 
 export type PeriodPreset = 'all' | 'first_half' | 'second_half' | 'custom';
@@ -229,8 +229,8 @@ export function ExpenseFilters({
           >
             <option value="todos" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Todos os Status</option>
             <option value="pago" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Pagos / Recebidos</option>
-            <option value="pendente" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Pendentes</option>
-            <option value="atrasado" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Atrasados</option>
+            <option value="pendente" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Pendentes / Atrasados</option>
+            <option value="atrasado" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">Apenas Atrasados</option>
           </select>
 
           {/* Category filter */}

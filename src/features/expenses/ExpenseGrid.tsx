@@ -6,7 +6,7 @@ import { ExpenseStatusModal } from './ExpenseStatusModal';
 import { MoneyDisplay } from '../../components/common/MoneyDisplay';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { formatDate, formatCurrency, getDaysDifference, getEffectiveExpenseValue } from '../../lib/utils';
+import { formatDate, formatCurrency, getDaysDifference, getEffectiveExpenseValue, getEffectiveExpenseStatus } from '../../lib/utils';
 import {
   CheckCircle2,
   Clock,
@@ -88,10 +88,9 @@ export function ExpenseGrid({
         {expenses.map((expense) => {
           const category = categories.find((c) => c.id === expense.categoriaId);
           const isSelected = selectedIds.includes(expense.id);
-          const isPaid = expense.status === 'pago';
-          const daysDiff = getDaysDifference(expense.dataVencimento);
           const isParcelado = expense.origemLancamento === 'parcelado' || (expense.lancamentosBase && expense.lancamentosBase.length > 0);
           const isExpanded = expandedParcelas[expense.id];
+          const { effectiveStatus, isPaid, isOverdue, daysDiff } = getEffectiveExpenseStatus(expense, selectedCompetencia);
 
           return (
             <div
@@ -137,7 +136,7 @@ export function ExpenseGrid({
                 >
                   {isPaid ? (
                     <Badge variant="success">Pago</Badge>
-                  ) : daysDiff < 0 ? (
+                  ) : isOverdue ? (
                     <Badge variant="danger">Atrasado</Badge>
                   ) : (
                     <Badge variant="warning">Pendente</Badge>

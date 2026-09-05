@@ -6,7 +6,7 @@ import { CategoryBadge } from '../../components/common/CategoryBadge';
 import { ExpenseStatusModal } from './ExpenseStatusModal';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { formatDate, formatCurrency, getDaysDifference, getEffectiveExpenseValue } from '../../lib/utils';
+import { formatDate, formatCurrency, getDaysDifference, getEffectiveExpenseValue, getEffectiveExpenseStatus } from '../../lib/utils';
 import {
   ChevronDown,
   ChevronRight,
@@ -237,10 +237,9 @@ export function ExpenseCategoryAccordion({
                 <div className="p-3 pt-0 space-y-3 border-t border-slate-100 dark:border-zinc-900">
                   {items.map((expense) => {
                     const isSelected = selectedIds.includes(expense.id);
-                    const isPaid = expense.status === 'pago';
-                    const daysDiff = getDaysDifference(expense.dataVencimento);
                     const isParcelado = expense.origemLancamento === 'parcelado' || (expense.lancamentosBase && expense.lancamentosBase.length > 0) || ((expense.numeroParcelas || 0) > 1);
                     const effectiveVal = getEffectiveExpenseValue(expense, selectedCompetencia);
+                    const { effectiveStatus, isPaid, isOverdue, daysDiff } = getEffectiveExpenseStatus(expense, selectedCompetencia);
 
                     return (
                       <div
@@ -271,10 +270,10 @@ export function ExpenseCategoryAccordion({
                               </Badge>
 
                               <Badge
-                                variant={isPaid ? 'success' : daysDiff < 0 ? 'danger' : 'warning'}
+                                variant={isPaid ? 'success' : isOverdue ? 'danger' : 'warning'}
                                 className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5"
                               >
-                                {isPaid ? 'Quitado' : daysDiff < 0 ? 'Atrasado' : 'Pendente'}
+                                {isPaid ? 'Quitado' : isOverdue ? 'Atrasado' : 'Pendente'}
                               </Badge>
 
                               {/* Category Badge with Icon and Color */}
@@ -403,12 +402,12 @@ export function ExpenseCategoryAccordion({
                                 className={`text-[10px] font-mono font-bold uppercase tracking-wider block mt-0.5 ${
                                   isPaid
                                     ? 'text-emerald-600 dark:text-emerald-400'
-                                    : daysDiff < 0
+                                    : isOverdue
                                     ? 'text-rose-600 dark:text-rose-400'
                                     : 'text-amber-600 dark:text-amber-400'
                                 }`}
                               >
-                                STATUS: {expense.status.toUpperCase()}
+                                STATUS: {effectiveStatus.toUpperCase()}
                               </span>
                             </div>
 
