@@ -460,4 +460,110 @@ describe('Gestão de Gastos Parcelados & Critérios 001 e 002', () => {
       expect(screen.getByText(/Total: R\$ 1\.000,00 \(5x\)/i)).toBeInTheDocument();
     });
   });
+
+  describe('Correção: Status e Atraso Efetivo em Gastos Parcelados (Evitar Falso ATRASADO)', () => {
+    it('exibe Quitado/Pago quando a parcela da competência atual já foi paga, mesmo que a data inicial do contrato seja anterior a hoje', () => {
+      // Exemplo do usuário: "Acordo Bradescard" (10x parcelas)
+      // Parcela 1/10 venceu dia 04/09/2026 e foi PAGA dia 28/08/2026.
+      // Hoje é 05/09/2026. O card NÃO deve exibir ATRASADO, deve exibir Quitado!
+      const mockAcordoBradescard: Gasto = {
+        id: 'gst-acordo-bradescard',
+        descricao: 'Acordo Bradescard',
+        tipo: 'despesa',
+        status: 'pendente', // Status global do contrato permanece pendente até pagar todas as 10x
+        origemLancamento: 'parcelado',
+        numeroParcelas: 10,
+        parcelaAtual: 1,
+        naoCompartilhar: false,
+        valor: 2574.70,
+        competencia: '2026-09-01',
+        dataVencimento: '2026-09-04', // Data da parcela 1 no passado
+        categoriaId: 'cat-lazer',
+        responsavelId: 'usr-1',
+        createdAt: '2026-08-28T08:00:00Z',
+        updatedAt: '2026-08-28T08:00:00Z',
+        lancamentosBase: [
+          {
+            id: 'lb-1',
+            gastoId: 'gst-acordo-bradescard',
+            descricao: 'Acordo Bradescard (1/10)',
+            valorParcela: 257.47,
+            numeroParcela: 1,
+            dataVencimentoParcela: '2026-09-04',
+            dataPagamentoParcela: '2026-08-28',
+            status: 'pago',
+            competencia: '2026-09-01',
+          },
+          {
+            id: 'lb-2',
+            gastoId: 'gst-acordo-bradescard',
+            descricao: 'Acordo Bradescard (2/10)',
+            valorParcela: 257.47,
+            numeroParcela: 2,
+            dataVencimentoParcela: '2026-10-04',
+            status: 'pendente',
+            competencia: '2026-10-01',
+          },
+        ],
+      };
+
+      render(
+        <ExpenseCategoryAccordion
+          expenses={[mockAcordoBradescard]}
+          selectedIds={[]}
+          onToggleSelect={vi.fn()}
+        />
+      );
+
+      // Deve exibir Quitado para o mês de setembro (competência atual)
+      expect(screen.getByText('Quitado')).toBeInTheDocument();
+      expect(screen.queryByText('Atrasado')).not.toBeInTheDocument();
+      expect(screen.getByText(/STATUS: PAGO/i)).toBeInTheDocument();
+    });
+
+    it('exibe Pendente quando a parcela da competência atual vence no futuro, mesmo se a data inicial do contrato for anterior', () => {
+      // Parcela de setembro vence em 20/09 (no futuro relativo a 05/09).
+      const mockGastoFuturo: Gasto = {
+        id: 'gst-futuro',
+        descricao: 'Financiamento Automotivo',
+        tipo: 'despesa',
+        status: 'pendente',
+        origemLancamento: 'parcelado',
+        numeroParcelas: 12,
+        parcelaAtual: 1,
+        naoCompartilhar: false,
+        valor: 12000,
+        competencia: '2026-09-01',
+        dataVencimento: '2026-09-20',
+        categoriaId: 'cat-lazer',
+        responsavelId: 'usr-1',
+        createdAt: '2026-08-01T08:00:00Z',
+        updatedAt: '2026-08-01T08:00:00Z',
+        lancamentosBase: [
+          {
+            id: 'lb-auto-1',
+            gastoId: 'gst-futuro',
+            descricao: 'Financiamento Automotivo (1/12)',
+            valorParcela: 1000,
+            numeroParcela: 1,
+            dataVencimentoParcela: '2026-09-20',
+            status: 'pendente',
+            competencia: '2026-09-01',
+          },
+        ],
+      };
+
+      render(
+        <ExpenseCategoryAccordion
+          expenses={[mockGastoFuturo]}
+          selectedIds={[]}
+          onToggleSelect={vi.fn()}
+        />
+      );
+
+      expect(screen.getByText('Pendente')).toBeInTheDocument();
+      expect(screen.queryByText('Atrasado')).not.toBeInTheDocument();
+      expect(screen.getByText(/STATUS: PENDENTE/i)).toBeInTheDocument();
+    });
+  });
 });

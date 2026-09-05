@@ -95,7 +95,7 @@ export function ExpensesPage() {
       const effectiveDueDate = relevantInstallment ? relevantInstallment.dataVencimentoParcela : item.dataVencimento;
 
       if (selectedStatus === 'pago' && effectiveStatus !== 'pago') return false;
-      if (selectedStatus === 'pendente' && effectiveStatus !== 'pendente') return false;
+      if (selectedStatus === 'pendente' && effectiveStatus === 'pago') return false;
       if (
         selectedStatus === 'atrasado' &&
         (effectiveStatus === 'pago' || !effectiveDueDate || effectiveDueDate.split('T')[0] >= todayStr)
