@@ -70,10 +70,10 @@ export function ExpenseFilters({
       setIsCustomDateOpen(false);
     } else if (preset === 'first_half') {
       onStartDateChange(`${year}-${month}-01`);
-      onEndDateChange(`${year}-${month}-15`);
+      onEndDateChange(`${year}-${month}-14`);
       setIsCustomDateOpen(false);
     } else if (preset === 'second_half') {
-      onStartDateChange(`${year}-${month}-16`);
+      onStartDateChange(`${year}-${month}-15`);
       onEndDateChange(`${year}-${month}-${String(lastDay).padStart(2, '0')}`);
       setIsCustomDateOpen(false);
     } else if (preset === 'custom') {
@@ -244,10 +244,10 @@ export function ExpenseFilters({
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'bg-white dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60'
             }`}
-            title="Gastos a pagar no início do mês (dias 01 a 15)"
+            title="Gastos a pagar no início do mês (dias 01 a 14)"
           >
             <span>🌓 1ª Quinzena</span>
-            <span className="opacity-70 text-[10px] font-mono">(01 a 15)</span>
+            <span className="opacity-70 text-[10px] font-mono">(01 a 14)</span>
           </button>
 
           <button
@@ -258,10 +258,10 @@ export function ExpenseFilters({
                 ? 'bg-emerald-600 text-white shadow-xs'
                 : 'bg-white dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60'
             }`}
-            title="Gastos a pagar no final do mês (dias 16 ao último dia)"
+            title={`Gastos a pagar no final do mês (dias 15 a ${lastDay})`}
           >
             <span>🌔 2ª Quinzena</span>
-            <span className="opacity-70 text-[10px] font-mono">(16 a {lastDay})</span>
+            <span className="opacity-70 text-[10px] font-mono">(15 a {lastDay})</span>
           </button>
 
           <button
