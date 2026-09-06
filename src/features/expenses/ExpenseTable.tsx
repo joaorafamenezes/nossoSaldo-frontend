@@ -50,7 +50,7 @@ export function ExpenseTable({
   };
 
   const handleConfirmStatus = (expense: Gasto) => {
-    const isPaid = expense.status === 'pago';
+    const { isPaid } = getEffectiveExpenseStatus(expense, selectedCompetencia);
     if (!isPaid) {
       confetti({
         particleCount: 50,
@@ -61,7 +61,7 @@ export function ExpenseTable({
     } else {
       toast.info(`Lançamento "${expense.descricao}" reaberto como PENDENTE.`);
     }
-    toggleExpenseStatus(expense.id);
+    toggleExpenseStatus(expense.id, selectedCompetencia);
   };
 
   const handleToggleInstallment = (gastoId: string, installment: any) => {
@@ -118,7 +118,7 @@ export function ExpenseTable({
                 const isSelected = selectedIds.includes(expense.id);
                 const isParcelado = expense.origemLancamento === 'parcelado' || (expense.lancamentosBase && expense.lancamentosBase.length > 0);
                 const isExpanded = expandedParcelas[expense.id];
-                const { effectiveStatus, isPaid, isOverdue, daysDiff } = getEffectiveExpenseStatus(expense, selectedCompetencia);
+                const { effectiveStatus, effectiveDueDate, isPaid, isOverdue, daysDiff } = getEffectiveExpenseStatus(expense, selectedCompetencia);
 
                 return (
                   <React.Fragment key={expense.id}>
@@ -172,8 +172,12 @@ export function ExpenseTable({
                           )}
 
                           {expense.origemLancamento === 'recorrente' && (
-                            <span title="Despesa Recorrente">
-                              <Repeat className="h-3.5 w-3.5 text-indigo-400" />
+                            <span
+                              className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] font-bold text-amber-400"
+                              title="Lançamento fixo projetado automaticamente sem data de término"
+                            >
+                              <Repeat className="h-3 w-3 text-amber-400" />
+                              <span>🔁 Fixo / Recorrente</span>
                             </span>
                           )}
 
@@ -198,7 +202,7 @@ export function ExpenseTable({
                           </span>
                         ) : (
                           <>
-                            <span>{formatDate(expense.dataVencimento)}</span>
+                            <span>{formatDate(effectiveDueDate)}</span>
                             {!isPaid && daysDiff <= 3 && (
                               <span
                                 className={`ml-1.5 text-[10px] font-bold ${

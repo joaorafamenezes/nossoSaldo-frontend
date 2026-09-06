@@ -141,15 +141,71 @@ export interface EffectiveExpenseStatus {
 }
 
 /**
+ * Retorna a data de vencimento efetiva de um lançamento para a competência selecionada.
+ * Para gastos recorrentes, calcula dinamicamente o dia de vencimento no mês da competência (ex: tratando meses de 28/29/30/31 dias).
+ */
+export function getEffectiveExpenseDueDate(
+  expense: {
+    dataVencimento?: string;
+    origemLancamento?: string;
+    dataInicioRecorrencia?: string;
+    lancamentosBase?: Array<{
+      dataVencimentoParcela?: string;
+      competencia?: string;
+      faturaCartaoCompetencia?: string;
+    }>;
+  },
+  selectedCompetencia?: string
+): string {
+  if (!expense) return '';
+
+  if (expense.origemLancamento === 'recorrente' && selectedCompetencia) {
+    const match = expense.lancamentosBase?.find(
+      (lb) =>
+        (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
+        (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia))
+    );
+    if (match?.dataVencimentoParcela) {
+      return match.dataVencimentoParcela.split('T')[0];
+    }
+
+    const baseDate = (expense.dataVencimento || expense.dataInicioRecorrencia || '2026-01-01').split('T')[0];
+    const baseDay = parseInt(baseDate.split('-')[2] || '1', 10);
+    const [y, m] = selectedCompetencia.split('-');
+    if (y && m) {
+      const maxDays = new Date(Number(y), Number(m), 0).getDate();
+      const targetDay = Math.min(baseDay, maxDays);
+      return `${y}-${m}-${String(targetDay).padStart(2, '0')}`;
+    }
+  }
+
+  if (expense.lancamentosBase && expense.lancamentosBase.length > 0 && selectedCompetencia) {
+    const match = expense.lancamentosBase.find(
+      (lb) =>
+        (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
+        (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia)) ||
+        (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(selectedCompetencia))
+    );
+    if (match?.dataVencimentoParcela) {
+      return match.dataVencimentoParcela.split('T')[0];
+    }
+  }
+
+  return (expense.dataVencimento || '').split('T')[0];
+}
+
+/**
  * Retorna o status efetivo, data de vencimento efetiva e indicador de atraso para o mês/período.
- * Evita que gastos parcelados com parcela do mês já paga ou com vencimento futuro sejam marcados indevidamente como ATRASADOS
- * devido à data de vencimento da primeira parcela do contrato no registro pai.
+ * Para gastos parcelados e recorrentes, avalia a ocorrência do mês correspondente em vez de travar no registro pai.
  */
 export function getEffectiveExpenseStatus(
   expense: {
     status: 'pendente' | 'pago' | 'atrasado' | 'cancelado' | string;
     dataVencimento: string;
     origemLancamento?: string;
+    competencia?: string;
+    dataInicioRecorrencia?: string;
+    dataPagamento?: string;
     lancamentosBase?: Array<{
       status: 'pendente' | 'pago' | 'atrasado' | 'cancelado' | string;
       dataVencimentoParcela?: string;
@@ -195,21 +251,34 @@ export function getEffectiveExpenseStatus(
       );
     }
 
-    if (!relevantInstallment) {
-      // Se não encontrou para a competência selecionada, busca a primeira parcela pendente
+    if (!relevantInstallment && expense.origemLancamento !== 'recorrente') {
+      // Se não encontrou para a competência selecionada e não for recorrente, busca a próxima parcela
       const nextPending = expense.lancamentosBase.find((lb) => lb.status !== 'pago');
       if (nextPending) {
         relevantInstallment = nextPending;
       } else {
-        // Se todas as parcelas foram quitadas
         relevantInstallment = expense.lancamentosBase[expense.lancamentosBase.length - 1];
       }
     }
   }
 
-  const rawStatus = relevantInstallment ? relevantInstallment.status : expense.status;
+  let effectiveDueDate = '';
+  let rawStatus = expense.status;
+
+  if (relevantInstallment) {
+    rawStatus = relevantInstallment.status;
+    effectiveDueDate = (relevantInstallment.dataVencimentoParcela || '').split('T')[0];
+  } else if (expense.origemLancamento === 'recorrente') {
+    effectiveDueDate = getEffectiveExpenseDueDate(expense, selectedCompetencia);
+    // Para despesa recorrente sem registro na competência selecionada:
+    // Se a competência selecionada for diferente da competência de criação onde foi pago, inicia como pendente
+    const isCreationMonth = expense.competencia && selectedCompetencia && expense.competencia.startsWith(selectedCompetencia);
+    rawStatus = isCreationMonth ? expense.status : 'pendente';
+  } else {
+    effectiveDueDate = (expense.dataVencimento || '').split('T')[0];
+  }
+
   const effectiveStatus = (rawStatus || 'pendente') as 'pendente' | 'pago' | 'atrasado' | 'cancelado';
-  const effectiveDueDate = (relevantInstallment?.dataVencimentoParcela || expense.dataVencimento || '').split('T')[0];
   const isPaid = effectiveStatus === 'pago';
   const daysDiff = effectiveDueDate ? getDaysDifference(effectiveDueDate) : 0;
   const isOverdue = !isPaid && daysDiff < 0;
@@ -223,4 +292,99 @@ export function getEffectiveExpenseStatus(
   };
 }
 
+/**
+ * Filtra e deduplica lançamentos para a competência selecionada.
+ * Para séries recorrentes que possuem múltiplos registros legados ou instâncias físicas no banco,
+ * prioriza o registro específico da competência ou mantém apenas 1 projeção modelo por série.
+ */
+export function getExpensesForCompetence<T extends {
+  id: string;
+  competencia?: string;
+  dataVencimento?: string;
+  origemLancamento?: string;
+  recorrenciaPaiId?: string;
+  dataInicioRecorrencia?: string;
+  dataFimRecorrencia?: string;
+  descricao?: string;
+  categoriaId?: string;
+  responsavelId?: string;
+  lancamentosBase?: Array<{
+    competencia?: string;
+    dataVencimentoParcela?: string;
+    faturaCartaoCompetencia?: string;
+  }>;
+}>(
+  expenses: T[],
+  selectedCompetencia: string,
+  startDate?: string,
+  endDate?: string
+): T[] {
+  const eligible = expenses.filter((item) => {
+    let relevantInstallment = undefined;
+    if (item.lancamentosBase && item.lancamentosBase.length > 0) {
+      if (startDate || endDate) {
+        relevantInstallment = item.lancamentosBase.find((lb) => {
+          const d = lb.dataVencimentoParcela ? lb.dataVencimentoParcela.split('T')[0] : '';
+          return (!startDate || d >= startDate) && (!endDate || d <= endDate);
+        });
+      } else {
+        relevantInstallment = item.lancamentosBase.find(
+          (lb) =>
+            (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
+            (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia)) ||
+            (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(selectedCompetencia))
+        );
+      }
+    }
 
+    const isRecorrente = item.origemLancamento === 'recorrente';
+    const recurringStartMonth = (item.dataInicioRecorrencia || item.competencia || item.dataVencimento || '').substring(0, 7);
+    const recurringEndMonth = item.dataFimRecorrencia ? item.dataFimRecorrencia.substring(0, 7) : null;
+    const isRecurringActiveInCompetence =
+      isRecorrente &&
+      (!recurringStartMonth || selectedCompetencia >= recurringStartMonth) &&
+      (!recurringEndMonth || selectedCompetencia <= recurringEndMonth);
+
+    if (startDate || endDate) {
+      const itemDueDate = getEffectiveExpenseDueDate(item, selectedCompetencia);
+      if (startDate && (!itemDueDate || itemDueDate < startDate)) return false;
+      if (endDate && (!itemDueDate || itemDueDate > endDate)) return false;
+    } else {
+      const matchesCompetence =
+        (item.competencia && item.competencia.startsWith(selectedCompetencia)) ||
+        (item.dataVencimento && item.dataVencimento.startsWith(selectedCompetencia)) ||
+        !!relevantInstallment ||
+        isRecurringActiveInCompetence;
+      if (!matchesCompetence) return false;
+    }
+
+    return true;
+  });
+
+  // Deduplica séries recorrentes para que apareça apenas 1 registro por competência
+  const recurringMap = new Map<string, T>();
+  const nonRecurring: T[] = [];
+
+  for (const item of eligible) {
+    if (item.origemLancamento !== 'recorrente') {
+      nonRecurring.push(item);
+      continue;
+    }
+
+    const descClean = (item.descricao || '').trim().toLowerCase();
+    const seriesKey = item.recorrenciaPaiId || `rec_${descClean}_${item.categoriaId || ''}_${item.responsavelId || ''}`;
+    const isExactMonth =
+      (item.competencia && item.competencia.startsWith(selectedCompetencia)) ||
+      (item.dataVencimento && item.dataVencimento.startsWith(selectedCompetencia));
+
+    const existing = recurringMap.get(seriesKey);
+    if (!existing) {
+      recurringMap.set(seriesKey, item);
+    } else if (isExactMonth) {
+      // Prioriza o registro físico cadastrado especificamente para este mês
+      recurringMap.set(seriesKey, item);
+    }
+  }
+
+  return [...nonRecurring, ...Array.from(recurringMap.values())];
+}
