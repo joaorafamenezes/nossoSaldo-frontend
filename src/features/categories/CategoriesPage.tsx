@@ -14,7 +14,7 @@ import {
   PieChart,
   Tag,
 } from 'lucide-react';
-import { formatCurrency, getEffectiveExpenseValue } from '../../lib/utils';
+import { formatCurrency, getEffectiveExpenseValue, getExpensesForCompetence } from '../../lib/utils';
 import { toast } from 'sonner';
 
 export function CategoriesPage() {
@@ -23,16 +23,7 @@ export function CategoriesPage() {
   const [categoryToEdit, setCategoryToEdit] = React.useState<Categoria | null>(null);
 
   // Month expenses
-  const monthExpenses = expenses.filter((e) => {
-    if (e.lancamentosBase && e.lancamentosBase.length > 0) {
-      return e.lancamentosBase.some(
-        (lb) =>
-          (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
-          (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia))
-      );
-    }
-    return e.competencia.startsWith(selectedCompetencia);
-  });
+  const monthExpenses = getExpensesForCompetence(expenses, selectedCompetencia);
 
   const totalMonthlyBudget = categories.reduce((sum, c) => sum + (Number(c.teto ?? c.orcamentoMensal ?? 0)), 0);
   const totalMonthlySpent = monthExpenses

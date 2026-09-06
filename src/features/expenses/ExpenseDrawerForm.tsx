@@ -94,7 +94,7 @@ export function ExpenseDrawerForm() {
       tipo,
       status,
       origemLancamento,
-      numeroParcelas,
+      numeroParcelas: origemLancamento === 'parcelado' ? numeroParcelas : 1,
       naoCompartilhar,
       valor: parsedValor,
       competencia: computedCompetencia,
@@ -104,6 +104,8 @@ export function ExpenseDrawerForm() {
       responsavelNome: user?.nome || 'Usuário',
       cartaoCreditoId: cartaoCreditoId || undefined,
       cartaoNome: matchedCard?.descricao,
+      dataInicioRecorrencia: origemLancamento === 'recorrente' ? dueDate : undefined,
+      dataFimRecorrencia: undefined,
     };
 
     setIsSubmitting(true);
@@ -117,7 +119,11 @@ export function ExpenseDrawerForm() {
           toast.success(`Série de ${numeroParcelas} parcelas gerada com sucesso!`);
         } else {
           await addExpense(expensePayload);
-          toast.success('Lançamento criado com sucesso!');
+          toast.success(
+            origemLancamento === 'recorrente'
+              ? 'Lançamento recorrente criado! Ele será projetado todo mês automaticamente.'
+              : 'Lançamento criado com sucesso!'
+          );
         }
         if (targetComp && targetComp !== selectedCompetencia) {
           setSelectedCompetencia(targetComp);
@@ -172,7 +178,10 @@ export function ExpenseDrawerForm() {
               </button>
               <button
                 type="button"
-                onClick={() => setTipo('receita')}
+                onClick={() => {
+                  setTipo('receita');
+                  if (origemLancamento === 'parcelado') setOrigemLancamento('unico');
+                }}
                 className={`py-2 rounded-lg text-xs font-bold transition-all ${
                   tipo === 'receita'
                     ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
@@ -205,7 +214,7 @@ export function ExpenseDrawerForm() {
               />
 
               <Input
-                label="Data de Vencimento"
+                label={origemLancamento === 'recorrente' ? '1º Vencimento / Início' : 'Data de Vencimento'}
                 type="date"
                 value={dataVencimento}
                 onChange={(e) => setDataVencimento(e.target.value)}
@@ -241,71 +250,110 @@ export function ExpenseDrawerForm() {
               </select>
             </div>
 
-            {/* Card selection */}
-            <div>
-              <label className="text-xs font-semibold text-zinc-300 block mb-1.5">
-                Forma de Pagamento / Cartão de Crédito
-              </label>
-              <select
-                value={cartaoCreditoId}
-                onChange={(e) => setCartaoCreditoId(e.target.value)}
-                className="flex h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100 outline-none focus:ring-1 focus:ring-emerald-500"
-              >
-                <option value="">Conta Corrente / PIX / Dinheiro</option>
-                {cards.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.descricao} (Final {c.ultimosDigitos})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Installments vs Single */}
+            {/* Card selection (only for expenses) */}
             {tipo === 'despesa' && (
-              <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
-                <label className="text-xs font-semibold text-zinc-300 block">
-                  Tipo de Lançamento
+              <div>
+                <label className="text-xs font-semibold text-zinc-300 block mb-1.5">
+                  Forma de Pagamento / Cartão de Crédito
                 </label>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {(['unico', 'parcelado', 'recorrente'] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => {
-                        setOrigemLancamento(mode);
-                        if (mode !== 'parcelado') setNumeroParcelas(1);
-                      }}
-                      className={`py-1.5 px-2 rounded-lg text-xs capitalize transition-colors ${
-                        origemLancamento === mode
-                          ? 'bg-zinc-800 text-white font-bold border border-zinc-700'
-                          : 'text-zinc-500 hover:text-zinc-300'
-                      }`}
-                    >
-                      {mode === 'unico' ? 'Único' : mode === 'parcelado' ? 'Parcelado' : 'Fixo / Mensal'}
-                    </button>
+                <select
+                  value={cartaoCreditoId}
+                  onChange={(e) => setCartaoCreditoId(e.target.value)}
+                  className="flex h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100 outline-none focus:ring-1 focus:ring-emerald-500"
+                >
+                  <option value="">Conta Corrente / PIX / Dinheiro</option>
+                  {cards.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.descricao} (Final {c.ultimosDigitos})
+                    </option>
                   ))}
-                </div>
-
-                {origemLancamento === 'parcelado' && (
-                  <div className="pt-2 space-y-2 border-t border-zinc-800/80">
-                    <label className="text-xs text-zinc-400 block">Número de Parcelas:</label>
-                    <input
-                      type="number"
-                      min={2}
-                      max={48}
-                      value={numeroParcelas}
-                      onChange={(e) => setNumeroParcelas(parseInt(e.target.value, 10) || 2)}
-                      className="h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-xs font-mono font-bold text-emerald-400 outline-none"
-                    />
-                    {parsedValor > 0 && (
-                      <p className="text-xs text-emerald-400 font-mono font-bold">
-                        ➔ {numeroParcelas}x de {formatCurrency(valorParcela)}
-                      </p>
-                    )}
-                  </div>
-                )}
+                </select>
               </div>
             )}
+
+            {/* Recurrence and Installment controls */}
+            <div className="space-y-2 rounded-xl border border-zinc-800 bg-zinc-950/60 p-3">
+              <label className="text-xs font-semibold text-zinc-300 block">
+                Frequência / Tipo de Lançamento
+              </label>
+              <div className={`grid ${tipo === 'despesa' ? 'grid-cols-3' : 'grid-cols-2'} gap-1.5`}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrigemLancamento('unico');
+                    setNumeroParcelas(1);
+                  }}
+                  className={`py-1.5 px-2 rounded-lg text-xs capitalize transition-colors ${
+                    origemLancamento === 'unico'
+                      ? 'bg-zinc-800 text-white font-bold border border-zinc-700'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  Único
+                </button>
+                {tipo === 'despesa' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOrigemLancamento('parcelado');
+                      if (numeroParcelas <= 1) setNumeroParcelas(2);
+                    }}
+                    className={`py-1.5 px-2 rounded-lg text-xs capitalize transition-colors ${
+                      origemLancamento === 'parcelado'
+                        ? 'bg-zinc-800 text-white font-bold border border-zinc-700'
+                        : 'text-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    Parcelado
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOrigemLancamento('recorrente');
+                    setNumeroParcelas(1);
+                  }}
+                  className={`py-1.5 px-2 rounded-lg text-xs capitalize transition-colors ${
+                    origemLancamento === 'recorrente'
+                      ? 'bg-zinc-800 text-white font-bold border border-zinc-700'
+                      : 'text-zinc-500 hover:text-zinc-300'
+                  }`}
+                >
+                  🔁 Fixo / Recorrente
+                </button>
+              </div>
+
+              {origemLancamento === 'parcelado' && (
+                <div className="pt-2 space-y-2 border-t border-zinc-800/80 animate-in fade-in duration-150">
+                  <label className="text-xs text-zinc-400 block">Número de Parcelas:</label>
+                  <input
+                    type="number"
+                    min={2}
+                    max={48}
+                    value={numeroParcelas}
+                    onChange={(e) => setNumeroParcelas(parseInt(e.target.value, 10) || 2)}
+                    className="h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-xs font-mono font-bold text-emerald-400 outline-none"
+                  />
+                  {parsedValor > 0 && (
+                    <p className="text-xs text-emerald-400 font-mono font-bold">
+                      ➔ {numeroParcelas}x de {formatCurrency(valorParcela)}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {origemLancamento === 'recorrente' && (
+                <div className="pt-2.5 space-y-1 border-t border-zinc-800/80 animate-in fade-in duration-150">
+                  <div className="flex items-center gap-1.5 text-xs text-amber-400 font-semibold">
+                    <Sparkles className="h-3.5 w-3.5" />
+                    <span>Recorrência Contínua Automática</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 leading-relaxed">
+                    Este lançamento será projetado automaticamente todo mês a partir do dia de vencimento ({dataVencimento ? `${dataVencimento.split('-')[2]}` : 'selecionado'}), sem data de término. Não será necessário recadastrar todo mês.
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Private vs Joint Account */}
             <div className="flex items-center gap-2.5 rounded-xl border border-zinc-800 bg-zinc-950 p-3">

@@ -105,7 +105,7 @@ export function ExpenseCategoryAccordion({
   const [statusInstallmentToConfirm, setStatusInstallmentToConfirm] = React.useState<any | null>(null);
 
   const handleConfirmStatus = (expense: Gasto) => {
-    const isPaid = expense.status === 'pago';
+    const { isPaid } = getEffectiveExpenseStatus(expense, selectedCompetencia);
     if (!isPaid) {
       confetti({
         particleCount: 60,
@@ -116,7 +116,7 @@ export function ExpenseCategoryAccordion({
     } else {
       toast.info(`Lançamento "${expense.descricao}" reaberto como PENDENTE.`);
     }
-    toggleExpenseStatus(expense.id);
+    toggleExpenseStatus(expense.id, selectedCompetencia);
   };
 
   const handleToggleInstallment = (gastoId: string, installment: any) => {
@@ -239,7 +239,7 @@ export function ExpenseCategoryAccordion({
                     const isSelected = selectedIds.includes(expense.id);
                     const isParcelado = expense.origemLancamento === 'parcelado' || (expense.lancamentosBase && expense.lancamentosBase.length > 0) || ((expense.numeroParcelas || 0) > 1);
                     const effectiveVal = getEffectiveExpenseValue(expense, selectedCompetencia);
-                    const { effectiveStatus, isPaid, isOverdue, daysDiff } = getEffectiveExpenseStatus(expense, selectedCompetencia);
+                    const { effectiveStatus, effectiveDueDate, isPaid, isOverdue, daysDiff } = getEffectiveExpenseStatus(expense, selectedCompetencia);
 
                     return (
                       <div
@@ -277,7 +277,19 @@ export function ExpenseCategoryAccordion({
                               </Badge>
 
                               {/* Category Badge with Icon and Color */}
+                              {/* Category Badge with Icon and Color */}
                               <CategoryBadge categoria={category} size="sm" />
+
+                              {/* Recurring Badge */}
+                              {expense.origemLancamento === 'recorrente' && (
+                                <span
+                                  className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-50 dark:bg-amber-950/30 px-2.5 py-0.5 text-[11px] font-bold text-amber-700 dark:text-amber-300"
+                                  title="Lançamento fixo projetado automaticamente sem data de término"
+                                >
+                                  <Repeat className="h-3 w-3 text-amber-500" />
+                                  <span>🔁 Fixo / Recorrente</span>
+                                </span>
+                              )}
 
                               {/* Installment Badge or Toggle Button */}
                               {(expense.origemLancamento === 'parcelado' || (expense.lancamentosBase && expense.lancamentosBase.length > 0)) && (
@@ -322,7 +334,7 @@ export function ExpenseCategoryAccordion({
                                 {expense.descricao}
                               </h4>
                               <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono mt-0.5">
-                                Competência: {expense.competencia.split('-')[1]}/{expense.competencia.split('-')[0]}
+                                Competência: {expense.origemLancamento === 'recorrente' ? `${selectedCompetencia.split('-')[1]}/${selectedCompetencia.split('-')[0]} (Recorrente)` : `${expense.competencia.split('-')[1]}/${expense.competencia.split('-')[0]}`}
                               </p>
                             </div>
 
@@ -331,7 +343,7 @@ export function ExpenseCategoryAccordion({
                               {/* Origem */}
                               <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1 text-[11px] text-slate-600 dark:text-zinc-400 font-mono shadow-xs">
                                 <Repeat className="h-3 w-3 text-slate-400 dark:text-zinc-500" />
-                                <span>Origem {expense.origemLancamento}</span>
+                                <span>Origem {expense.origemLancamento === 'recorrente' ? 'recorrente contínua' : expense.origemLancamento}</span>
                               </span>
 
                               {/* Responsável */}
@@ -352,7 +364,7 @@ export function ExpenseCategoryAccordion({
                               ) : (
                                 <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2.5 py-1 text-[11px] text-slate-600 dark:text-zinc-400 font-mono shadow-xs">
                                   <Calendar className="h-3 w-3 text-slate-400 dark:text-zinc-500" />
-                                  <span>Vencimento: {formatDate(expense.dataVencimento)}</span>
+                                  <span>Vencimento: {formatDate(effectiveDueDate)}</span>
                                 </span>
                               )}
 

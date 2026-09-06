@@ -9,7 +9,12 @@ import { BatchActionsBar } from './BatchActionsBar';
 import { Button } from '../../components/ui/Button';
 import { PlusCircle, Receipt } from 'lucide-react';
 import { StatusGasto } from '../../types/financial';
-import { getEffectiveExpenseValue } from '../../lib/utils';
+import {
+  getEffectiveExpenseValue,
+  getEffectiveExpenseDueDate,
+  getEffectiveExpenseStatus,
+  getExpensesForCompetence,
+} from '../../lib/utils';
 import { toast } from 'sonner';
 
 export function ExpensesPage() {
@@ -36,52 +41,39 @@ export function ExpensesPage() {
   const [viewMode, setViewMode] = React.useState<'category' | 'table' | 'grid'>('category');
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
 
-  // Filter expenses strictly by selected competence / date range, search, joint account responsible and credit card
+  // Synchronize / adapt period dates whenever the competence changes
+  React.useEffect(() => {
+    if (periodPreset === 'all') {
+      setStartDate('');
+      setEndDate('');
+    } else if (periodPreset === 'first_half') {
+      const [year, month] = (selectedCompetencia || '2026-09').split('-');
+      setStartDate(`${year}-${month}-01`);
+      setEndDate(`${year}-${month}-14`);
+    } else if (periodPreset === 'second_half') {
+      const [year, month] = (selectedCompetencia || '2026-09').split('-');
+      const lastDay = new Date(Number(year), Number(month), 0).getDate();
+      setStartDate(`${year}-${month}-15`);
+      setEndDate(`${year}-${month}-${String(lastDay).padStart(2, '0')}`);
+    } else if (periodPreset === 'custom') {
+      // If custom dates belong to a different month than selectedCompetencia, reset to all
+      if (
+        (startDate && !startDate.startsWith(selectedCompetencia)) ||
+        (endDate && !endDate.startsWith(selectedCompetencia))
+      ) {
+        setPeriodPreset('all');
+        setStartDate('');
+        setEndDate('');
+      }
+    }
+  }, [selectedCompetencia]);
+
+  // Filter and deduplicate expenses strictly by selected competence / date range, search, joint account responsible and credit card
   const filteredExpenses = React.useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
+    const competenceExpenses = getExpensesForCompetence(expenses, selectedCompetencia, startDate, endDate);
 
-    return expenses.filter((item) => {
-      // Find relevant child installment for the active competence / date range if expense is parcelado
-      let relevantInstallment = undefined;
-      if (item.lancamentosBase && item.lancamentosBase.length > 0) {
-        if (startDate || endDate) {
-          relevantInstallment = item.lancamentosBase.find((lb) => {
-            const d = lb.dataVencimentoParcela ? lb.dataVencimentoParcela.split('T')[0] : '';
-            return (!startDate || d >= startDate) && (!endDate || d <= endDate);
-          });
-        } else {
-          relevantInstallment = item.lancamentosBase.find(
-            (lb) =>
-              (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
-              (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia)) ||
-              (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(selectedCompetencia))
-          );
-        }
-      }
-
-      // Date period filtering (vencimento)
-      if (startDate || endDate) {
-        if (relevantInstallment) {
-          const instVencStr = relevantInstallment.dataVencimentoParcela ? relevantInstallment.dataVencimentoParcela.split('T')[0] : '';
-          if (startDate && (!instVencStr || instVencStr < startDate)) return false;
-          if (endDate && (!instVencStr || instVencStr > endDate)) return false;
-        } else {
-          const vencimentoStr = item.dataVencimento ? item.dataVencimento.split('T')[0] : '';
-          if (startDate && (!vencimentoStr || vencimentoStr < startDate)) {
-            return false;
-          }
-          if (endDate && (!vencimentoStr || vencimentoStr > endDate)) {
-            return false;
-          }
-        }
-      } else {
-        const matchesCompetence =
-          item.competencia.startsWith(selectedCompetencia) ||
-          (item.dataVencimento && item.dataVencimento.startsWith(selectedCompetencia)) ||
-          !!relevantInstallment;
-        if (!matchesCompetence) return false;
-      }
-
+    return competenceExpenses.filter((item) => {
       if (searchQuery) {
         const query = searchQuery.toLowerCase();
         const matchesDesc = item.descricao.toLowerCase().includes(query);
@@ -91,9 +83,13 @@ export function ExpensesPage() {
 
       if (selectedType !== 'todos' && item.tipo !== selectedType) return false;
 
-      // Status filtering with effective status awareness for child installments
-      const effectiveStatus = relevantInstallment ? relevantInstallment.status : item.status;
-      const effectiveDueDate = relevantInstallment ? relevantInstallment.dataVencimentoParcela : item.dataVencimento;
+      // Status filtering with effective status awareness for child installments and recurring items
+      const { effectiveStatus, effectiveDueDate } = getEffectiveExpenseStatus(
+        item,
+        selectedCompetencia,
+        startDate,
+        endDate
+      );
 
       if (selectedStatus === 'pago' && effectiveStatus !== 'pago') return false;
       if (selectedStatus === 'pendente' && effectiveStatus === 'pago') return false;

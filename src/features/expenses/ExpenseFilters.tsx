@@ -7,10 +7,7 @@ import {
   Table as TableIcon,
   Layers,
   X,
-  Calendar,
   CalendarRange,
-  Clock,
-  Filter,
   Pin,
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -113,7 +110,6 @@ export function ExpenseFilters({
   onViewModeChange,
 }: ExpenseFiltersProps) {
   const { categories, cards, jointInfo, selectedCompetencia } = useAppStore();
-  const [isCustomDateOpen, setIsCustomDateOpen] = React.useState(periodPreset === 'custom' || !!startDate || !!endDate);
 
   const [year, month] = (selectedCompetencia || '2026-09').split('-');
   const lastDay = new Date(Number(year), Number(month), 0).getDate();
@@ -151,17 +147,13 @@ export function ExpenseFilters({
     if (preset === 'all') {
       onStartDateChange('');
       onEndDateChange('');
-      setIsCustomDateOpen(false);
     } else if (preset === 'first_half') {
       onStartDateChange(`${year}-${month}-01`);
       onEndDateChange(`${year}-${month}-14`);
-      setIsCustomDateOpen(false);
     } else if (preset === 'second_half') {
       onStartDateChange(`${year}-${month}-15`);
       onEndDateChange(`${year}-${month}-${String(lastDay).padStart(2, '0')}`);
-      setIsCustomDateOpen(false);
     } else if (preset === 'custom') {
-      setIsCustomDateOpen(true);
       if (!startDate) onStartDateChange(`${year}-${month}-01`);
       if (!endDate) onEndDateChange(`${year}-${month}-${String(lastDay).padStart(2, '0')}`);
     }
@@ -173,34 +165,12 @@ export function ExpenseFilters({
     onPeriodPresetChange('all');
     onStartDateChange('');
     onEndDateChange('');
-    setIsCustomDateOpen(false);
   };
 
   return (
     <div className="space-y-2.5">
-      {/* Main Filter Row: Search, Type, Status, Category, Card, Pin Default, View Mode */}
-      <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white/80 dark:bg-zinc-900/60 p-3 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xs backdrop-blur-md">
-        {/* Search Input */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3.5 top-3 h-4 w-4 text-slate-400 dark:text-zinc-400" />
-          <Input
-            type="text"
-            placeholder="Buscar por descrição, cartão ou categoria..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="pl-9.5 h-10 bg-slate-50 dark:bg-zinc-950/80 border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-zinc-100"
-          />
-          {searchQuery && (
-            <button
-              onClick={() => onSearchChange('')}
-              className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        {/* Select Filters & View Mode */}
+      {/* Main Filter Row: Responsável, Tipo, Status, Category, Card, Pin Default, View Mode */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 bg-white/80 dark:bg-zinc-900/60 p-3 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xs backdrop-blur-md">
         <div className="flex flex-wrap items-center gap-2">
           {/* Responsável filter (Visible when Joint Account exists) */}
           {jointInfo && (
@@ -303,106 +273,119 @@ export function ExpenseFilters({
               {isCurrentSavedAsDefault ? 'Padrão Salvo' : 'Fixar Padrão'}
             </span>
           </button>
+        </div>
 
-          {/* View Mode Toggle */}
-          <div className="flex rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-950 p-1">
-            <button
-              onClick={() => onViewModeChange('category')}
-              className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
-                viewMode === 'category'
-                  ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-200'
-              }`}
-              title="Agrupar por Categoria (Accordion)"
-            >
-              <Layers className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Categorias</span>
-            </button>
-            <button
-              onClick={() => onViewModeChange('table')}
-              className={`rounded-lg p-1.5 transition-colors ${
-                viewMode === 'table' ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-500 dark:hover:text-zinc-300'
-              }`}
-              title="Visualização em Tabela"
-            >
-              <TableIcon className="h-4 w-4" />
-            </button>
-            <button
-              onClick={() => onViewModeChange('grid')}
-              className={`rounded-lg p-1.5 transition-colors ${
-                viewMode === 'grid' ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-500 dark:hover:text-zinc-300'
-              }`}
-              title="Visualização em Grade"
-            >
-              <LayoutGrid className="h-4 w-4" />
-            </button>
-          </div>
+        {/* View Mode Toggle */}
+        <div className="flex rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-950 p-1 shrink-0">
+          <button
+            onClick={() => onViewModeChange('category')}
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
+              viewMode === 'category'
+                ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-200'
+            }`}
+            title="Agrupar por Categoria (Accordion)"
+          >
+            <Layers className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Categorias</span>
+          </button>
+          <button
+            onClick={() => onViewModeChange('table')}
+            className={`rounded-lg p-1.5 transition-colors ${
+              viewMode === 'table' ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-500 dark:hover:text-zinc-300'
+            }`}
+            title="Visualização em Tabela"
+          >
+            <TableIcon className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => onViewModeChange('grid')}
+            className={`rounded-lg p-1.5 transition-colors ${
+              viewMode === 'grid' ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-500 dark:hover:text-zinc-300'
+            }`}
+            title="Visualização em Grade"
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
         </div>
       </div>
 
-      {/* Secondary Row: Date Range & Quinzena Quick Selector */}
+      {/* Secondary Row: Search, Date Range & Quinzena Quick Selector */}
       <div className="flex flex-wrap items-center justify-between gap-2.5 bg-slate-50/80 dark:bg-zinc-900/40 px-3.5 py-2 rounded-2xl border border-slate-200/80 dark:border-zinc-800/80 text-xs">
-        {/* Quick Presets: Mês Inteiro vs 1ª Quinzena vs 2ª Quinzena vs Personalizado */}
-        <div className="flex items-center flex-wrap gap-1.5">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 flex items-center gap-1 mr-1">
-            <CalendarRange className="h-3.5 w-3.5 text-emerald-500" />
-            Vencimento:
-          </span>
+        {/* Left side: Search Input + Vencimento Presets */}
+        <div className="flex flex-wrap items-center gap-2.5 flex-1 min-w-[280px]">
+          {/* Search Input before VENCIMENTO: */}
+          <div className="relative flex-1 min-w-[180px] max-w-sm">
+            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-slate-400 dark:text-zinc-400 pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Buscar por descrição, cartão ou categoria..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="pl-8.5 pr-8 h-8 text-xs bg-white dark:bg-zinc-950 border-slate-200 dark:border-zinc-800 text-slate-900 dark:text-zinc-100 rounded-xl shadow-xs"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => onSearchChange('')}
+                className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 dark:text-zinc-500 dark:hover:text-zinc-300"
+                title="Limpar busca"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
 
-          <button
-            type="button"
-            onClick={() => handlePresetSelect('all')}
-            className={`px-3 py-1 rounded-xl font-semibold text-xs transition-all ${
-              periodPreset === 'all' && !startDate && !endDate
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-white dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60'
-            }`}
-          >
-            Mês Completo
-          </button>
+          {/* Quick Presets: Vencimento: Mês Inteiro vs 1ª Quinzena vs 2ª Quinzena */}
+          <div className="flex items-center flex-wrap gap-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 flex items-center gap-1 mr-0.5">
+              <CalendarRange className="h-3.5 w-3.5 text-emerald-500" />
+              Vencimento:
+            </span>
 
-          <button
-            type="button"
-            onClick={() => handlePresetSelect('first_half')}
-            className={`px-3 py-1 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 ${
-              periodPreset === 'first_half'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-white dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60'
-            }`}
-            title="Gastos a pagar no início do mês (dias 01 a 14)"
-          >
-            <span>🌓 1ª Quinzena</span>
-            <span className="opacity-70 text-[10px] font-mono">(01 a 14)</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => handlePresetSelect('all')}
+              className={`px-3 py-1 rounded-xl font-semibold text-xs transition-all ${
+                periodPreset === 'all' && !startDate && !endDate
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60'
+              }`}
+            >
+              Mês Completo
+            </button>
 
-          <button
-            type="button"
-            onClick={() => handlePresetSelect('second_half')}
-            className={`px-3 py-1 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 ${
-              periodPreset === 'second_half'
-                ? 'bg-emerald-600 text-white shadow-xs'
-                : 'bg-white dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60'
-            }`}
-            title={`Gastos a pagar no final do mês (dias 15 a ${lastDay})`}
-          >
-            <span>🌔 2ª Quinzena</span>
-            <span className="opacity-70 text-[10px] font-mono">(15 a {lastDay})</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => handlePresetSelect('first_half')}
+              className={`px-3 py-1 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 ${
+                periodPreset === 'first_half'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60'
+              }`}
+              title="Gastos a pagar no início do mês (dias 01 a 14)"
+            >
+              <span>🌓 1ª Quinzena</span>
+              <span className="opacity-70 text-[10px] font-mono">(01 a 14)</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => handlePresetSelect('custom')}
-            className={`px-3 py-1 rounded-xl font-semibold text-xs transition-all ${
-              periodPreset === 'custom' || (periodPreset === 'all' && (startDate || endDate))
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'bg-white dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60'
-            }`}
-          >
-            📅 Personalizado
-          </button>
+            <button
+              type="button"
+              onClick={() => handlePresetSelect('second_half')}
+              className={`px-3 py-1 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 ${
+                periodPreset === 'second_half'
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'bg-white dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60'
+              }`}
+              title={`Gastos a pagar no final do mês (dias 15 a ${lastDay})`}
+            >
+              <span>🌔 2ª Quinzena</span>
+              <span className="opacity-70 text-[10px] font-mono">(15 a ${lastDay})</span>
+            </button>
+          </div>
         </div>
 
-        {/* Date Inputs for Custom/Visual Range */}
+        {/* Right side: Date Inputs for De / Até and Limpar button */}
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5">
             <span className="text-[11px] text-slate-500 dark:text-zinc-400 font-medium">De:</span>

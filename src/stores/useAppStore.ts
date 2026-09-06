@@ -15,7 +15,13 @@ import {
   INITIAL_AI_MESSAGES,
   INITIAL_JOINT_INFO,
 } from '../data/initialMockData';
-import { getEffectiveExpenseValue } from '../lib/utils';
+import {
+  getEffectiveExpenseValue,
+  getEffectiveExpenseDueDate,
+  getEffectiveExpenseStatus,
+  getCompetenciaDisplay,
+  getExpensesForCompetence,
+} from '../lib/utils';
 import * as api from '../services/api';
 
 export type NavigationTab = 'dashboard' | 'expenses' | 'cards' | 'supermarket' | 'categories' | 'ai' | 'joint';
@@ -69,7 +75,7 @@ interface AppState {
   addInstallmentSeries: (baseExpense: Omit<Gasto, 'id' | 'createdAt' | 'updatedAt'>, totalParcelas: number, valorPorParcela: number) => Promise<void>;
   updateExpense: (id: string, updates: Partial<Gasto>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
-  toggleExpenseStatus: (id: string) => Promise<void>;
+  toggleExpenseStatus: (id: string, targetCompetencia?: string) => Promise<void>;
   toggleInstallmentStatus: (gastoId: string, installmentId: string) => Promise<void>;
   batchToggleStatus: (ids: string[], targetStatus: StatusGasto) => Promise<void>;
   batchDeleteExpenses: (ids: string[]) => Promise<void>;
@@ -479,20 +485,7 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   getResumoCompetencia: () => {
     const { expenses, selectedCompetencia } = get();
-    const filtered = expenses.filter((g) => {
-      if (g.lancamentosBase && g.lancamentosBase.length > 0) {
-        return g.lancamentosBase.some(
-          (lb) =>
-            (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
-            (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia)) ||
-            (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(selectedCompetencia))
-        );
-      }
-      return (
-        g.competencia.startsWith(selectedCompetencia) ||
-        (g.dataVencimento && g.dataVencimento.startsWith(selectedCompetencia))
-      );
-    });
+    const filtered = getExpensesForCompetence(expenses, selectedCompetencia);
 
     let receitasTotal = 0;
     let receitasRecebidas = 0;
@@ -502,31 +495,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     let despesasPendentes = 0;
     let despesasAtrasadas = 0;
 
-    const todayStr = new Date().toISOString().split('T')[0];
-
     filtered.forEach((item) => {
       const val = getEffectiveExpenseValue(item, selectedCompetencia);
-      let relevantInstallment = undefined;
-      if (item.lancamentosBase && item.lancamentosBase.length > 0) {
-        relevantInstallment = item.lancamentosBase.find(
-          (lb) =>
-            (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
-            (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia)) ||
-            (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(selectedCompetencia))
-        );
-      }
-      const effectiveStatus = relevantInstallment ? relevantInstallment.status : item.status;
-      const effectiveDue = relevantInstallment ? relevantInstallment.dataVencimentoParcela : item.dataVencimento;
+      const { isPaid, isOverdue } = getEffectiveExpenseStatus(item, selectedCompetencia);
 
       if (item.tipo === 'receita') {
         receitasTotal += val;
-        if (effectiveStatus === 'pago') receitasRecebidas += val;
+        if (isPaid) receitasRecebidas += val;
         else receitasPendentes += val;
       } else {
         despesasTotal += val;
-        if (effectiveStatus === 'pago') {
+        if (isPaid) {
           despesasPagas += val;
-        } else if (effectiveDue && effectiveDue < todayStr) {
+        } else if (isOverdue) {
           despesasAtrasadas += val;
         } else {
           despesasPendentes += val;
@@ -698,9 +679,67 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
-  toggleExpenseStatus: async (id) => {
+  toggleExpenseStatus: async (id, targetCompetencia) => {
+    const comp = targetCompetencia || get().selectedCompetencia;
     const expense = get().expenses.find((e) => e.id === id);
     if (!expense) return;
+
+    if (expense.origemLancamento === 'recorrente') {
+      const now = new Date().toISOString().split('T')[0];
+      const effectiveDue = getEffectiveExpenseDueDate(expense, comp);
+      const existingInstallment = expense.lancamentosBase?.find(
+        (lb) =>
+          (lb.competencia && lb.competencia.startsWith(comp)) ||
+          (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(comp))
+      );
+
+      if (existingInstallment) {
+        await get().toggleInstallmentStatus(id, existingInstallment.id);
+        return;
+      }
+
+      const { isPaid } = getEffectiveExpenseStatus(expense, comp);
+      const nextStatus: StatusGasto = isPaid ? 'pendente' : 'pago';
+
+      const newInstallment = {
+        id: `lb-rec-${id}-${comp}`,
+        gastoId: id,
+        descricao: `${expense.descricao} (${getCompetenciaDisplay(comp)})`,
+        valorParcela: expense.valor,
+        numeroParcela: 1,
+        dataVencimentoParcela: effectiveDue,
+        dataPagamentoParcela: nextStatus === 'pago' ? now : undefined,
+        status: nextStatus,
+        competencia: `${comp}-01`,
+      };
+
+      set((state) => ({
+        expenses: state.expenses.map((e) =>
+          e.id === id
+            ? {
+                ...e,
+                lancamentosBase: [...(e.lancamentosBase || []), newInstallment],
+                updatedAt: new Date().toISOString(),
+              }
+            : e
+        ),
+      }));
+
+      const token = localStorage.getItem('@NossoSaldo:token');
+      if (token) {
+        try {
+          if (nextStatus === 'pago') {
+            await api.payExpense(token, id, { dataPagamento: new Date().toISOString() });
+          } else {
+            await api.reopenExpense(token, id);
+          }
+          await get().loadApiData(token);
+        } catch (err) {
+          console.error('Erro ao atualizar status recorrente na API:', err);
+        }
+      }
+      return;
+    }
 
     const nextStatus: StatusGasto = expense.status === 'pago' ? 'pendente' : 'pago';
     const token = localStorage.getItem('@NossoSaldo:token');
