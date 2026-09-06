@@ -23,13 +23,21 @@ export interface DefaultExpenseFilters {
   selectedStatus: string;
   selectedCategoryId: string;
   selectedResponsavelId: string;
+  selectedCardId: string;
 }
 
 export const getDefaultFilters = (): DefaultExpenseFilters => {
   try {
     const raw = localStorage.getItem(DEFAULT_FILTERS_STORAGE_KEY);
     if (raw) {
-      return JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      return {
+        selectedType: parsed.selectedType || 'todos',
+        selectedStatus: parsed.selectedStatus || 'todos',
+        selectedCategoryId: parsed.selectedCategoryId || 'todos',
+        selectedResponsavelId: parsed.selectedResponsavelId || 'todos',
+        selectedCardId: parsed.selectedCardId || 'todos',
+      };
     }
     const legacyStatus = localStorage.getItem(DEFAULT_STATUS_STORAGE_KEY);
     return {
@@ -37,6 +45,7 @@ export const getDefaultFilters = (): DefaultExpenseFilters => {
       selectedStatus: legacyStatus || 'todos',
       selectedCategoryId: 'todos',
       selectedResponsavelId: 'todos',
+      selectedCardId: 'todos',
     };
   } catch {
     return {
@@ -44,6 +53,7 @@ export const getDefaultFilters = (): DefaultExpenseFilters => {
       selectedStatus: 'todos',
       selectedCategoryId: 'todos',
       selectedResponsavelId: 'todos',
+      selectedCardId: 'todos',
     };
   }
 };
@@ -68,6 +78,8 @@ interface ExpenseFiltersProps {
   onCategoryChange: (id: string) => void;
   selectedResponsavelId: string;
   onResponsavelChange: (id: string) => void;
+  selectedCardId: string;
+  onCardChange: (id: string) => void;
   startDate: string;
   onStartDateChange: (d: string) => void;
   endDate: string;
@@ -89,6 +101,8 @@ export function ExpenseFilters({
   onCategoryChange,
   selectedResponsavelId,
   onResponsavelChange,
+  selectedCardId,
+  onCardChange,
   startDate,
   onStartDateChange,
   endDate,
@@ -98,7 +112,7 @@ export function ExpenseFilters({
   viewMode,
   onViewModeChange,
 }: ExpenseFiltersProps) {
-  const { categories, jointInfo, selectedCompetencia } = useAppStore();
+  const { categories, cards, jointInfo, selectedCompetencia } = useAppStore();
   const [isCustomDateOpen, setIsCustomDateOpen] = React.useState(periodPreset === 'custom' || !!startDate || !!endDate);
 
   const [year, month] = (selectedCompetencia || '2026-09').split('-');
@@ -110,7 +124,8 @@ export function ExpenseFilters({
     savedDefaults.selectedType === selectedType &&
     savedDefaults.selectedStatus === selectedStatus &&
     savedDefaults.selectedCategoryId === selectedCategoryId &&
-    savedDefaults.selectedResponsavelId === selectedResponsavelId;
+    savedDefaults.selectedResponsavelId === selectedResponsavelId &&
+    savedDefaults.selectedCardId === selectedCardId;
 
   const handleSaveAllAsDefault = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -120,6 +135,7 @@ export function ExpenseFilters({
         selectedStatus,
         selectedCategoryId,
         selectedResponsavelId,
+        selectedCardId,
       };
       localStorage.setItem(DEFAULT_FILTERS_STORAGE_KEY, JSON.stringify(newDefaults));
       localStorage.setItem(DEFAULT_STATUS_STORAGE_KEY, selectedStatus);
@@ -162,7 +178,7 @@ export function ExpenseFilters({
 
   return (
     <div className="space-y-2.5">
-      {/* Main Filter Row: Search, Type, Status, Category, Pin Default, View Mode */}
+      {/* Main Filter Row: Search, Type, Status, Category, Card, Pin Default, View Mode */}
       <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 bg-white/80 dark:bg-zinc-900/60 p-3 rounded-2xl border border-slate-200 dark:border-zinc-800 shadow-xs backdrop-blur-md">
         {/* Search Input */}
         <div className="relative flex-1 max-w-md">
@@ -247,6 +263,26 @@ export function ExpenseFilters({
             ))}
           </select>
 
+          {/* Cartão de Crédito / Forma de Pagamento filter */}
+          <select
+            value={selectedCardId}
+            onChange={(e) => onCardChange(e.target.value)}
+            className="h-10 rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-3 text-xs font-semibold text-slate-800 dark:text-zinc-200 outline-none cursor-pointer focus:ring-1 focus:ring-emerald-500 max-w-[170px] truncate"
+            title="Filtrar por Cartão de Crédito ou Método de Pagamento"
+          >
+            <option value="todos" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+              💳 Todos os Cartões
+            </option>
+            <option value="sem_cartao" className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+              💵 Sem Cartão (Conta / PIX)
+            </option>
+            {(cards || []).map((c) => (
+              <option key={c.id} value={c.id} className="bg-white dark:bg-zinc-950 text-slate-900 dark:text-zinc-100">
+                💳 {c.descricao} {c.ultimosDigitos ? `(Final ${c.ultimosDigitos})` : ''}
+              </option>
+            ))}
+          </select>
+
           {/* Unified Pin Button - Salvar Filtros como Padrão */}
           <button
             type="button"
@@ -259,7 +295,7 @@ export function ExpenseFilters({
             title={
               isCurrentSavedAsDefault
                 ? 'Filtros atuais estão salvos como padrão inicial'
-                : 'Fixar filtros atuais (Responsável, Tipo, Status e Categoria) como padrão ao abrir a tela'
+                : 'Fixar filtros atuais (Responsável, Tipo, Status, Categoria e Cartão) como padrão ao abrir a tela'
             }
           >
             <Pin className={`h-3.5 w-3.5 ${isCurrentSavedAsDefault ? 'fill-amber-400 text-amber-500' : ''}`} />

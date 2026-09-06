@@ -29,13 +29,14 @@ export function ExpensesPage() {
   const [selectedStatus, setSelectedStatus] = React.useState(initialDefaults.selectedStatus);
   const [selectedCategoryId, setSelectedCategoryId] = React.useState(initialDefaults.selectedCategoryId);
   const [selectedResponsavelId, setSelectedResponsavelId] = React.useState(initialDefaults.selectedResponsavelId);
+  const [selectedCardId, setSelectedCardId] = React.useState(initialDefaults.selectedCardId || 'todos');
   const [startDate, setStartDate] = React.useState('');
   const [endDate, setEndDate] = React.useState('');
   const [periodPreset, setPeriodPreset] = React.useState<PeriodPreset>('all');
   const [viewMode, setViewMode] = React.useState<'category' | 'table' | 'grid'>('category');
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
 
-  // Filter expenses strictly by selected competence / date range, search and joint account responsible
+  // Filter expenses strictly by selected competence / date range, search, joint account responsible and credit card
   const filteredExpenses = React.useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
 
@@ -114,9 +115,16 @@ export function ExpensesPage() {
         if (!matchesId && !matchesName) return false;
       }
 
+      // Credit card filtering
+      if (selectedCardId === 'sem_cartao') {
+        if (item.cartaoCreditoId || item.cartaoNome) return false;
+      } else if (selectedCardId !== 'todos') {
+        if (item.cartaoCreditoId !== selectedCardId) return false;
+      }
+
       return true;
     });
-  }, [expenses, jointInfo, selectedCompetencia, startDate, endDate, searchQuery, selectedType, selectedStatus, selectedCategoryId, selectedResponsavelId]);
+  }, [expenses, jointInfo, selectedCompetencia, startDate, endDate, searchQuery, selectedType, selectedStatus, selectedCategoryId, selectedResponsavelId, selectedCardId]);
 
   const handleToggleSelect = (id: string) => {
     setSelectedIds((prev) =>
@@ -183,6 +191,8 @@ export function ExpensesPage() {
         onCategoryChange={setSelectedCategoryId}
         selectedResponsavelId={selectedResponsavelId}
         onResponsavelChange={setSelectedResponsavelId}
+        selectedCardId={selectedCardId}
+        onCardChange={setSelectedCardId}
         startDate={startDate}
         onStartDateChange={setStartDate}
         endDate={endDate}

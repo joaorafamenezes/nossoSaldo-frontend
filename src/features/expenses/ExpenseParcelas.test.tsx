@@ -147,6 +147,7 @@ vi.mock('../../stores/useAppStore', () => ({
       { id: 'cat-alimentacao', descricao: 'Alimentação', iconName: 'ShoppingCart', color: '#10b981' },
       { id: 'cat-educacao', descricao: 'Educação', iconName: 'Book', color: '#3b82f6' },
     ],
+    cards: storeState.cards || [],
     expenses: storeState.expenses || [mockParceladoExpensePaidInSeptember, mockParceladoExpensePendingInSeptember, mockSingleExpense],
     jointInfo: null,
     selectedCompetencia: storeState.selectedCompetencia || '2026-09',

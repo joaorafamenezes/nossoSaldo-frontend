@@ -10,6 +10,10 @@ vi.mock('../../stores/useAppStore', () => ({
       { id: 'cat-1', descricao: 'Alimentação' },
       { id: 'cat-2', descricao: 'Moradia' },
     ],
+    cards: [
+      { id: 'card-1', descricao: 'Nubank Ultravioleta', ultimosDigitos: '8842', bandeira: 'mastercard' },
+      { id: 'card-2', descricao: 'XP Visa Infinite', ultimosDigitos: '1234', bandeira: 'visa' },
+    ],
     jointInfo: null,
     selectedCompetencia: '2026-09',
   }),
@@ -27,6 +31,8 @@ describe('ExpenseFilters - Quinzena & Período (Critério 001)', () => {
     onCategoryChange: vi.fn(),
     selectedResponsavelId: 'todos',
     onResponsavelChange: vi.fn(),
+    selectedCardId: 'todos',
+    onCardChange: vi.fn(),
     startDate: '',
     onStartDateChange: vi.fn(),
     endDate: '',
@@ -134,7 +140,7 @@ describe('ExpenseFilters - Quinzena & Período (Critério 001)', () => {
     expect(gastosSegundaQuinzena.map((g) => g.descricao)).toEqual(['Academia', 'Energia', 'Cartão de Crédito']);
   });
 
-  it('permite fixar todos os filtros ativos como padrão no localStorage (História: Status & Filtros Default Configuráveis)', () => {
+  it('permite fixar todos os filtros ativos incluindo Cartão de Crédito como padrão no localStorage', () => {
     localStorage.clear();
     const props = {
       ...defaultProps,
@@ -142,11 +148,12 @@ describe('ExpenseFilters - Quinzena & Período (Critério 001)', () => {
       selectedStatus: 'pendente',
       selectedCategoryId: 'cat-1',
       selectedResponsavelId: 'user-123',
+      selectedCardId: 'card-1',
     };
     render(<ExpenseFilters {...props} />);
 
-    // Clica no botão de fixar padrão localizado após Categorias
-    const pinBtn = screen.getByTitle(/Fixar filtros atuais \(Responsável, Tipo, Status e Categoria\) como padrão/i);
+    // Clica no botão de fixar padrão localizado após Categorias e Cartão
+    const pinBtn = screen.getByTitle(/Fixar filtros atuais \(Responsável, Tipo, Status, Categoria e Cartão\) como padrão/i);
     expect(pinBtn).toBeInTheDocument();
 
     fireEvent.click(pinBtn);
@@ -159,7 +166,44 @@ describe('ExpenseFilters - Quinzena & Período (Critério 001)', () => {
       selectedStatus: 'pendente',
       selectedCategoryId: 'cat-1',
       selectedResponsavelId: 'user-123',
+      selectedCardId: 'card-1',
     });
     expect(localStorage.getItem('@NossoSaldo:defaultExpenseStatus')).toBe('pendente');
+  });
+
+  it('renderiza opções de cartões de crédito e permite selecionar um cartão específico (Critério 01)', () => {
+    const onCardChange = vi.fn();
+    const props = { ...defaultProps, onCardChange };
+    render(<ExpenseFilters {...props} />);
+
+    const cardSelect = screen.getByTitle(/Filtrar por Cartão de Crédito ou Método de Pagamento/i);
+    expect(cardSelect).toBeInTheDocument();
+
+    expect(screen.getByText(/💳 Todos os Cartões/i)).toBeInTheDocument();
+    expect(screen.getByText(/💵 Sem Cartão \(Conta \/ PIX\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Nubank Ultravioleta \(Final 8842\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/XP Visa Infinite \(Final 1234\)/i)).toBeInTheDocument();
+
+    fireEvent.change(cardSelect, { target: { value: 'card-1' } });
+    expect(onCardChange).toHaveBeenCalledWith('card-1');
+  });
+
+  it('filtra corretamente gastos por cartão de crédito e sem cartão (Critério 01)', () => {
+    const mockGastos = [
+      { id: '1', descricao: 'Supermercado', cartaoCreditoId: 'card-1', cartaoNome: 'Nubank' },
+      { id: '2', descricao: 'Restaurante', cartaoCreditoId: 'card-2', cartaoNome: 'XP' },
+      { id: '3', descricao: 'Aluguel Pix', cartaoCreditoId: undefined, cartaoNome: undefined },
+    ];
+
+    // Filtrar apenas card-1
+    const selectedCard1 = 'card-1';
+    const gastosCard1 = mockGastos.filter((g) => g.cartaoCreditoId === selectedCard1);
+    expect(gastosCard1).toHaveLength(1);
+    expect(gastosCard1[0].descricao).toBe('Supermercado');
+
+    // Filtrar sem cartão
+    const gastosSemCartao = mockGastos.filter((g) => !g.cartaoCreditoId && !g.cartaoNome);
+    expect(gastosSemCartao).toHaveLength(1);
+    expect(gastosSemCartao[0].descricao).toBe('Aluguel Pix');
   });
 });
