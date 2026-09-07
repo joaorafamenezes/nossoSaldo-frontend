@@ -21,6 +21,7 @@ import {
   getEffectiveExpenseStatus,
   getCompetenciaDisplay,
   getExpensesForCompetence,
+  calculateCardAvailableLimit,
 } from '../lib/utils';
 import * as api from '../services/api';
 
@@ -411,31 +412,12 @@ export const useAppStore = create<AppState>((set, get) => ({
 
       // 4. Recalculate each Card's real available limit and invoice totals dynamically
       const updatedCards = cards.map((card) => {
-        const limiteTotal = Number(card.valorLimite) || 0;
-
-        // Sum unpaid invoices for this card
-        const cardInvoicesTotal = invoiceData
-          .filter(
-            (inv) =>
-              inv.cartaoCreditoId === card.id &&
-              inv.status !== 'paga' &&
-              inv.status !== 'cancelada'
-          )
-          .reduce((sum, inv) => sum + Number(inv.valorTotal || 0), 0);
-
-        // Sum unpaid expenses directly linked to this card
-        const cardExpensesTotal = normalizedExpenses
-          .filter(
-            (e: any) =>
-              e.cartaoCreditoId === card.id &&
-              e.tipo === 'despesa' &&
-              e.status !== 'pago' &&
-              e.status !== 'cancelado'
-          )
-          .reduce((sum: number, e: any) => sum + Number(e.valor || 0), 0);
-
-        const faturaAtual = Math.max(cardInvoicesTotal, cardExpensesTotal);
-        const limiteDisponivel = Math.max(0, limiteTotal - faturaAtual);
+        const { faturaAtual, limiteDisponivel } = calculateCardAvailableLimit(
+          card,
+          invoiceData,
+          normalizedExpenses,
+          comp
+        );
 
         return {
           ...card,
