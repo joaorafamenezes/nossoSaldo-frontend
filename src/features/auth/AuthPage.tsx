@@ -6,6 +6,7 @@ import { Card } from '../../components/ui/Card';
 import { Wallet, Sparkles, Mail, Lock, User, ArrowRight, ShieldCheck, LockKeyhole } from 'lucide-react';
 import { toast } from 'sonner';
 import { APP_NAME, APP_VERSION, ALLOW_ACCOUNT_CREATION } from '../../config/appMeta';
+import { DevEnvironmentBanner } from '../../components/common/DevEnvironmentBanner';
 
 export function AuthPage() {
   const { login, register, requestPasswordReset, isLoading, error } = useAuthStore();
@@ -41,7 +42,11 @@ export function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-zinc-950 flex items-center justify-center p-4 select-none relative overflow-hidden">
+    <div className="min-h-screen w-full flex flex-col bg-zinc-950 relative overflow-hidden">
+      {/* Dev/Local Environment Banner */}
+      <DevEnvironmentBanner />
+
+      <div className="flex-1 w-full flex items-center justify-center p-4 select-none relative">
       {/* Background Hero Image with Dual Harmony & Glassmorphism theme */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-50 pointer-events-none scale-105 transform transition-transform duration-1000"
@@ -191,6 +196,7 @@ export function AuthPage() {
           <ShieldCheck className="h-4 w-4 text-emerald-500" />
           <span>Criptografia de ponta a ponta e conexões seguras</span>
         </div>
+      </div>
       </div>
     </div>
   );
