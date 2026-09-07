@@ -33,9 +33,7 @@ export function CardsPage() {
 
   const totalLimites = cards.reduce((sum, c) => sum + (Number(c.valorLimite) || 0), 0);
   const totalDisponivel = cards.reduce((sum, c) => sum + (Number(c.limiteDisponivel) || (Number(c.valorLimite) || 0)), 0);
-  const totalFaturasAbertas = invoices
-    .filter((i) => i.status === 'aberta' || i.status === 'fechada')
-    .reduce((sum, i) => sum + (Number(i.valorTotal) || 0), 0);
+  const totalFaturasAbertas = cards.reduce((sum, c) => sum + (Number(c.faturaAtual) || 0), 0);
 
   const handleEditCard = (card: CartaoCredito, e: React.MouseEvent) => {
     e.stopPropagation();

@@ -388,3 +388,102 @@ export function getExpensesForCompetence<T extends {
 
   return [...nonRecurring, ...Array.from(recurringMap.values())];
 }
+
+/**
+ * Calcula dinamicamente o valor da fatura atual e o limite disponível de um cartão de crédito.
+ * Regra:
+ * - A fatura atual e faturas passadas em aberto comprometem o limite.
+ * - Futuras parcelas de compras parceladas (origemLancamento === 'parcelado') comprometem o limite em aberto.
+ * - Gastos recorrentes (assinaturas contínuas) comprometem o limite APENAS no mês vigente/fatura atual,
+ *   NÃO ocupando o limite em meses futuros antecipadamente.
+ */
+export function calculateCardAvailableLimit(
+  card: {
+    id: string;
+    valorLimite?: number;
+    limiteTotal?: number;
+  },
+  invoices: Array<{
+    cartaoCreditoId?: string;
+    competencia: string;
+    valorTotal?: number;
+    status: string;
+  }>,
+  expenses: Array<{
+    cartaoCreditoId?: string;
+    tipo?: string;
+    status?: string;
+    valor?: number;
+    competencia?: string;
+    dataVencimento?: string;
+    origemLancamento?: string;
+    lancamentosBase?: Array<{
+      competencia?: string;
+      dataVencimentoParcela?: string;
+      valorParcela?: number;
+      status?: string;
+    }>;
+  }>,
+  currentCompetencia: string
+): { faturaAtual: number; limiteDisponivel: number } {
+  const limiteTotal = Number(card.valorLimite || (card as any).limiteTotal || 0);
+
+  // 1. Fatura da competência atual
+  const currentInvoice = invoices.find(
+    (inv) =>
+      inv.cartaoCreditoId === card.id &&
+      inv.competencia === currentCompetencia
+  ) || invoices.find(
+    (inv) =>
+      inv.cartaoCreditoId === card.id &&
+      (inv.status === 'aberta' || inv.status === 'fechada') &&
+      inv.competencia <= currentCompetencia
+  );
+
+  // Despesas diretas vinculadas ao cartão no mês atual
+  const currentMonthExpenses = expenses
+    .filter(
+      (e) =>
+        e.cartaoCreditoId === card.id &&
+        e.tipo === 'despesa' &&
+        e.status !== 'pago' &&
+        e.status !== 'cancelado' &&
+        (e.competencia?.startsWith(currentCompetencia) || e.dataVencimento?.startsWith(currentCompetencia))
+    )
+    .reduce((sum, e) => sum + Number(e.valor || 0), 0);
+
+  const faturaAtual = currentInvoice ? Number(currentInvoice.valorTotal || 0) : currentMonthExpenses;
+
+  // 2. Faturas em aberto até a competência atual (fatura atual + eventuais faturas passadas não pagas)
+  const faturasPassadasEAtualAbertas = invoices
+    .filter(
+      (inv) =>
+        inv.cartaoCreditoId === card.id &&
+        inv.status !== 'paga' &&
+        inv.status !== 'cancelada' &&
+        inv.competencia <= currentCompetencia
+    )
+    .reduce((sum, inv) => sum + Number(inv.valorTotal || 0), 0);
+
+  const comprometidoFaturaAtualEPassadas = Math.max(faturasPassadasEAtualAbertas, faturaAtual);
+
+  // 3. Futuras parcelas de compras parceladas (> currentCompetencia)
+  // Assinaturas e gastos recorrentes NÃO comprometem limite futuro
+  const futureInstallmentsTotal = expenses
+    .filter((e) => e.cartaoCreditoId === card.id && e.origemLancamento === 'parcelado')
+    .flatMap((e) => e.lancamentosBase || [])
+    .filter((lb) => {
+      const lbComp = (lb.competencia || lb.dataVencimentoParcela || '').substring(0, 7);
+      return lbComp > currentCompetencia && lb.status !== 'pago' && lb.status !== 'cancelado';
+    })
+    .reduce((sum, lb) => sum + Number(lb.valorParcela || 0), 0);
+
+  const limiteComprometido = comprometidoFaturaAtualEPassadas + futureInstallmentsTotal;
+  const limiteDisponivel = Math.max(0, limiteTotal - limiteComprometido);
+
+  return {
+    faturaAtual,
+    limiteDisponivel,
+  };
+}
+
