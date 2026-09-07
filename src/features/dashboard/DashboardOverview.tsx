@@ -15,7 +15,7 @@ import {
   Users2,
   Sparkles,
 } from 'lucide-react';
-import { getCompetenciaDisplay } from '../../lib/utils';
+import { getCompetenciaDisplay, isDevEnvironment } from '../../lib/utils';
 
 export function DashboardOverview() {
   const { getResumoCompetencia, selectedCompetencia, jointInfo } = useAppStore();
@@ -144,7 +144,9 @@ export function DashboardOverview() {
 
               <div className="pt-4 border-t border-zinc-800/80 flex items-center justify-between text-xs text-zinc-400">
                 <span>Lançamentos deste mês: <strong>{resumo.despesasTotal > 0 || resumo.receitasTotal > 0 ? 'Ativo' : 'Nenhum'}</strong></span>
-                <span className="text-emerald-400 font-semibold font-mono">Base: nossosaldo_dev</span>
+                {isDevEnvironment() && (
+                  <span className="text-emerald-400 font-semibold font-mono">Base: nossosaldo_dev</span>
+                )}
               </div>
             </>
           )}

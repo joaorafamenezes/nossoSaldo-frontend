@@ -487,3 +487,38 @@ export function calculateCardAvailableLimit(
   };
 }
 
+/**
+ * Detecta se a aplicação está rodando em ambiente local ou de desenvolvimento.
+ */
+export function isDevEnvironment(): boolean {
+  if (typeof window === 'undefined') return false;
+
+  // Variável Vite DEV ou MODE development
+  if (import.meta.env?.DEV) return true;
+  if (import.meta.env?.MODE === 'development') return true;
+
+  // Checagem de host local / desenvolvimento
+  const host = window.location?.hostname || '';
+  if (
+    host === 'localhost' ||
+    host === '127.0.0.1' ||
+    host === '[::1]' ||
+    host.endsWith('.local') ||
+    host.includes('dev.') ||
+    host.includes('-dev.')
+  ) {
+    return true;
+  }
+
+  // Variável de ambiente personalizada se configurada
+  const appEnv = (import.meta.env?.VITE_APP_ENV || import.meta.env?.VITE_ENV || '').toLowerCase();
+  if (appEnv === 'development' || appEnv === 'dev' || appEnv === 'local') return true;
+  if (appEnv === 'production' || appEnv === 'prod') return false;
+
+  return false;
+}
+
+export function isProductionEnvironment(): boolean {
+  return !isDevEnvironment();
+}
+
