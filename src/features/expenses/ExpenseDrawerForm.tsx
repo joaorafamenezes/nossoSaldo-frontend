@@ -5,9 +5,9 @@ import { TipoGasto, OrigemLancamento, StatusGasto, Gasto } from '../../types/fin
 import { CategoryModal } from '../categories/CategoryModal';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
-import { X, Sparkles, Plus, Calendar, CreditCard, Tag, User, Layers } from 'lucide-react';
+import { X, Sparkles, Plus, Calendar, CreditCard, Tag, User, Layers, CheckCircle2, Clock } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, formatDate, calculateCardDueDate } from '../../lib/utils';
 
 export function ExpenseDrawerForm() {
   const {
@@ -69,6 +69,18 @@ export function ExpenseDrawerForm() {
 
   const parsedValor = parseFloat(valor.replace(',', '.')) || 0;
   const valorParcela = numeroParcelas > 1 ? parsedValor / numeroParcelas : parsedValor;
+  const matchedCard = cards.find((c) => c.id === cartaoCreditoId);
+
+  const handleCardChange = (newCardId: string) => {
+    setCartaoCreditoId(newCardId);
+    if (newCardId) {
+      const card = cards.find((c) => c.id === newCardId);
+      if (card) {
+        const autoDueDate = calculateCardDueDate(card, selectedCompetencia || dataVencimento || new Date());
+        setDataVencimento(autoDueDate);
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,16 +95,17 @@ export function ExpenseDrawerForm() {
       return;
     }
 
+    const isPaid = status === 'pago';
     const dueDate = dataVencimento || new Date().toISOString().split('T')[0];
     const dueParts = dueDate.split('-');
     const computedCompetencia = `${dueParts[0]}-${dueParts[1]}-01`;
     const targetComp = `${dueParts[0]}-${dueParts[1]}`;
-    const matchedCard = cards.find((c) => c.id === cartaoCreditoId);
 
     const expensePayload: Omit<Gasto, 'id' | 'createdAt' | 'updatedAt'> = {
       descricao,
       tipo,
       status,
+      dataPagamento: isPaid ? (dueDate || new Date().toISOString().split('T')[0]) : undefined,
       origemLancamento,
       numeroParcelas: origemLancamento === 'parcelado' ? numeroParcelas : 1,
       naoCompartilhar,
@@ -119,11 +132,19 @@ export function ExpenseDrawerForm() {
           toast.success(`Série de ${numeroParcelas} parcelas gerada com sucesso!`);
         } else {
           await addExpense(expensePayload);
-          toast.success(
-            origemLancamento === 'recorrente'
-              ? 'Lançamento recorrente criado! Ele será projetado todo mês automaticamente.'
-              : 'Lançamento criado com sucesso!'
-          );
+          if (status === 'pago') {
+            toast.success(
+              tipo === 'receita'
+                ? 'Receita cadastrada já como recebida!'
+                : 'Lançamento cadastrado já como pago!'
+            );
+          } else {
+            toast.success(
+              origemLancamento === 'recorrente'
+                ? 'Lançamento recorrente criado! Ele será projetado todo mês automaticamente.'
+                : 'Lançamento criado com sucesso!'
+            );
+          }
         }
         if (targetComp && targetComp !== selectedCompetencia) {
           setSelectedCompetencia(targetComp);
@@ -222,10 +243,43 @@ export function ExpenseDrawerForm() {
               />
             </div>
 
+            {/* Status do Lançamento: Pendente vs Já Pago / Já Recebido */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-zinc-300 block">
+                Status do Lançamento
+              </label>
+              <div className="grid grid-cols-2 gap-2 p-1 bg-zinc-950 rounded-xl border border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setStatus('pendente')}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    status === 'pendente'
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-xs'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>Pendente</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatus('pago')}
+                  className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
+                    status === 'pago'
+                      ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 shadow-xs'
+                      : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <span>{tipo === 'receita' ? 'Já Recebido' : 'Já Pago'}</span>
+                </button>
+              </div>
+            </div>
+
             {/* Category */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="text-xs font-semibold text-zinc-300">
+                <label htmlFor="categoriaId" className="text-xs font-semibold text-zinc-300">
                   Categoria
                 </label>
                 <button
@@ -238,9 +292,10 @@ export function ExpenseDrawerForm() {
                 </button>
               </div>
               <select
+                id="categoriaId"
                 value={categoriaId}
                 onChange={(e) => setCategoriaId(e.target.value)}
-                className="flex h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100 outline-none focus:ring-1 focus:ring-emerald-500"
+                className="flex h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100 outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
               >
                 {categories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
@@ -253,21 +308,28 @@ export function ExpenseDrawerForm() {
             {/* Card selection (only for expenses) */}
             {tipo === 'despesa' && (
               <div>
-                <label className="text-xs font-semibold text-zinc-300 block mb-1.5">
+                <label htmlFor="cartaoCreditoId" className="text-xs font-semibold text-zinc-300 block mb-1.5">
                   Forma de Pagamento / Cartão de Crédito
                 </label>
                 <select
+                  id="cartaoCreditoId"
                   value={cartaoCreditoId}
-                  onChange={(e) => setCartaoCreditoId(e.target.value)}
-                  className="flex h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100 outline-none focus:ring-1 focus:ring-emerald-500"
+                  onChange={(e) => handleCardChange(e.target.value)}
+                  className="flex h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100 outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
                 >
                   <option value="">Conta Corrente / PIX / Dinheiro</option>
                   {cards.map((c) => (
                     <option key={c.id} value={c.id}>
-                      {c.descricao} (Final {c.ultimosDigitos})
+                      {c.descricao} (Final {c.ultimosDigitos}) • Venc. dia {c.diaVencimento}
                     </option>
                   ))}
                 </select>
+                {matchedCard && (
+                  <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-emerald-400 font-medium bg-emerald-950/30 border border-emerald-800/40 rounded-lg px-2.5 py-1">
+                    <CreditCard className="h-3.5 w-3.5 shrink-0" />
+                    <span>Vencimento automático na fatura vigente: <strong>{formatDate(dataVencimento)}</strong></span>
+                  </div>
+                )}
               </div>
             )}
 
