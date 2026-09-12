@@ -522,3 +522,72 @@ export function isProductionEnvironment(): boolean {
   return !isDevEnvironment();
 }
 
+/**
+ * Calcula a data de vencimento da fatura vigente de um cartão de crédito.
+ * - Se a data de referência for posterior ao dia de fechamento, o lançamento entra na fatura do mês subsequente.
+ * - Se diaVencimento > diaFechamento, o vencimento é no mesmo mês da fatura; se <=, é no mês seguinte.
+ */
+export function calculateCardDueDate(
+  card: { diaFechamento?: number; diaVencimento?: number },
+  referenceDateInput?: Date | string
+): string {
+  if (!card) return new Date().toISOString().split('T')[0];
+
+  const diaFechamento = Number(card.diaFechamento) || 10;
+  const diaVencimento = Number(card.diaVencimento) || 17;
+
+  let refDate: Date;
+  let isFullDate = true;
+
+  if (referenceDateInput) {
+    if (typeof referenceDateInput === 'string') {
+      if (referenceDateInput.length === 7) {
+        // Formato "YYYY-MM"
+        const [y, m] = referenceDateInput.split('-');
+        refDate = new Date(Number(y), Number(m) - 1, 1);
+        isFullDate = false;
+      } else {
+        const clean = referenceDateInput.split('T')[0];
+        const [y, m, d] = clean.split('-');
+        refDate = new Date(Number(y), Number(m) - 1, Number(d));
+      }
+    } else {
+      refDate = new Date(referenceDateInput);
+    }
+  } else {
+    refDate = new Date();
+  }
+
+  let compYear = refDate.getFullYear();
+  let compMonth = refDate.getMonth(); // 0 a 11
+
+  // Se for uma data completa e o dia for posterior ao fechamento, entra na fatura do mês subsequente
+  if (isFullDate && refDate.getDate() > diaFechamento) {
+    compMonth += 1;
+    if (compMonth > 11) {
+      compMonth = 0;
+      compYear += 1;
+    }
+  }
+
+  // Se diaVencimento <= diaFechamento, o vencimento é no mês seguinte ao fechamento
+  let dueYear = compYear;
+  let dueMonth = compMonth;
+  if (diaVencimento <= diaFechamento) {
+    dueMonth += 1;
+    if (dueMonth > 11) {
+      dueMonth = 0;
+      dueYear += 1;
+    }
+  }
+
+  // Ajusta para o último dia do mês caso o mês tenha menos dias (ex: fevereiro)
+  const lastDayOfDueMonth = new Date(dueYear, dueMonth + 1, 0).getDate();
+  const safeDueDay = Math.min(diaVencimento, lastDayOfDueMonth);
+
+  const formattedMonth = String(dueMonth + 1).padStart(2, '0');
+  const formattedDay = String(safeDueDay).padStart(2, '0');
+
+  return `${dueYear}-${formattedMonth}-${formattedDay}`;
+}
+
