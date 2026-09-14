@@ -15,10 +15,10 @@ import {
 import { Button } from '../ui/Button';
 import { getCompetenciaDisplay } from '../../lib/utils';
 
+import { GlobalDateFilter } from './GlobalDateFilter';
+
 export function Header() {
   const {
-    selectedCompetencia,
-    setSelectedCompetencia,
     setCommandMenuOpen,
     setAiDrawerOpen,
     isPrivacyMode,
@@ -28,36 +28,11 @@ export function Header() {
 
   const { theme, toggleTheme } = useThemeStore();
 
-  // Competence selector options (dynamic range)
-  const competencias = React.useMemo(() => {
-    const list: string[] = [];
-    const currentYear = new Date().getFullYear();
-    for (let y = currentYear - 1; y <= currentYear + 1; y++) {
-      for (let m = 1; m <= 12; m++) {
-        list.push(`${y}-${String(m).padStart(2, '0')}`);
-      }
-    }
-    return list;
-  }, []);
-
   return (
     <header className="sticky top-0 z-20 flex h-16 w-full items-center justify-between border-b border-zinc-800 bg-zinc-950/80 px-4 md:px-6 backdrop-blur-xl">
-      {/* Left: Competence Month Selector */}
+      {/* Left: Global Period / Date Filter */}
       <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 shadow-sm">
-          <Calendar className="h-4 w-4 text-emerald-400 shrink-0" />
-          <select
-            value={selectedCompetencia}
-            onChange={(e) => setSelectedCompetencia(e.target.value)}
-            className="bg-transparent text-xs md:text-sm font-semibold text-zinc-100 outline-none cursor-pointer pr-1"
-          >
-            {competencias.map((comp) => (
-              <option key={comp} value={comp} className="bg-zinc-900 text-zinc-100">
-                {getCompetenciaDisplay(comp)}
-              </option>
-            ))}
-          </select>
-        </div>
+        <GlobalDateFilter />
       </div>
 
       {/* Center: Command Palette Trigger */}

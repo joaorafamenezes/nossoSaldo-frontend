@@ -22,6 +22,9 @@ import {
   getCompetenciaDisplay,
   getExpensesForCompetence,
   calculateCardAvailableLimit,
+  getCategoryBudgetStatus,
+  getCategoryBudgetAlerts,
+  formatCurrency,
 } from '../lib/utils';
 import * as api from '../services/api';
 
@@ -33,6 +36,12 @@ interface AppState {
   setActiveTab: (tab: NavigationTab) => void;
   selectedCompetencia: string; // YYYY-MM
   setSelectedCompetencia: (comp: string) => void;
+  dateFilterMode: 'month' | 'custom';
+  customStartDate: string;
+  customEndDate: string;
+  setDateFilterMode: (mode: 'month' | 'custom') => void;
+  setCustomDateRange: (start: string, end: string) => void;
+  clearCustomDateRange: () => void;
   isCommandMenuOpen: boolean;
   setCommandMenuOpen: (open: boolean) => void;
   isAiDrawerOpen: boolean;
@@ -237,12 +246,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   setActiveTab: (tab) => set({ activeTab: tab }),
   selectedCompetencia: getCurrentCompetencia(),
   setSelectedCompetencia: (comp) => {
-    set({ selectedCompetencia: comp });
+    set({ selectedCompetencia: comp, dateFilterMode: 'month', customStartDate: '', customEndDate: '' });
     const token = localStorage.getItem('@NossoSaldo:token');
     if (token) {
       get().loadApiData(token);
     }
   },
+  dateFilterMode: 'month',
+  customStartDate: '',
+  customEndDate: '',
+  setDateFilterMode: (mode) => set({ dateFilterMode: mode }),
+  setCustomDateRange: (start, end) =>
+    set({ dateFilterMode: 'custom', customStartDate: start, customEndDate: end }),
+  clearCustomDateRange: () =>
+    set({ dateFilterMode: 'month', customStartDate: '', customEndDate: '' }),
   isCommandMenuOpen: false,
   setCommandMenuOpen: (open) => set({ isCommandMenuOpen: open }),
   isAiDrawerOpen: false,
@@ -466,8 +483,11 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   getResumoCompetencia: () => {
-    const { expenses, selectedCompetencia } = get();
-    const filtered = getExpensesForCompetence(expenses, selectedCompetencia);
+    const { expenses, selectedCompetencia, dateFilterMode, customStartDate, customEndDate } = get();
+    const startDate = dateFilterMode === 'custom' && customStartDate ? customStartDate : undefined;
+    const endDate = dateFilterMode === 'custom' && customEndDate ? customEndDate : undefined;
+
+    const filtered = getExpensesForCompetence(expenses, selectedCompetencia, startDate, endDate);
 
     let receitasTotal = 0;
     let receitasRecebidas = 0;
@@ -478,8 +498,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     let despesasAtrasadas = 0;
 
     filtered.forEach((item) => {
-      const val = getEffectiveExpenseValue(item, selectedCompetencia);
-      const { isPaid, isOverdue } = getEffectiveExpenseStatus(item, selectedCompetencia);
+      const val = getEffectiveExpenseValue(item, selectedCompetencia, startDate, endDate);
+      const { isPaid, isOverdue } = getEffectiveExpenseStatus(item, selectedCompetencia, startDate, endDate);
 
       if (item.tipo === 'receita') {
         receitasTotal += val;
@@ -1146,7 +1166,39 @@ export const useAppStore = create<AppState>((set, get) => ({
       const lower = content.toLowerCase();
       let reply = 'Analisei seus dados financeiros e está tudo dentro do planejado!';
 
-      if (lower.includes('supermercado') || lower.includes('mercado')) {
+      if (
+        lower.includes('categoria') ||
+        lower.includes('limite') ||
+        lower.includes('teto') ||
+        lower.includes('100%') ||
+        lower.includes('80%') ||
+        lower.includes('60%') ||
+        lower.includes('estour') ||
+        lower.includes('ating') ||
+        lower.includes('alerta')
+      ) {
+        const { categories, expenses, selectedCompetencia, customStartDate, customEndDate } = get();
+        const alerts = getCategoryBudgetAlerts(categories, expenses, selectedCompetencia, customStartDate, customEndDate);
+        const at100 = alerts.filter((a) => a.percentage >= 100);
+        const at80 = alerts.filter((a) => a.percentage >= 80 && a.percentage < 100);
+        const at60 = alerts.filter((a) => a.percentage >= 60 && a.percentage < 80);
+
+        if (lower.includes('100%') || lower.includes('estour')) {
+          if (at100.length > 0) {
+            reply = `Identifiquei ${at100.length} categoria(s) que atingiram ou excederam 100% do limite configurado:\n\n` +
+              at100.map((c) => `• **${c.descricao}**: Gasto de ${formatCurrency(c.spent)} de um teto de ${formatCurrency(c.budget)} (${c.percentage}% consumido${c.spent > c.budget ? ` - excedeu em ${formatCurrency(c.spent - c.budget)}` : ''})`).join('\n');
+          } else {
+            reply = 'No período selecionado, nenhuma categoria atingiu 100% do limite configurado. Todas continuam dentro do teto orçamentário!';
+          }
+        } else if (alerts.length > 0) {
+          reply = `Diagnóstico de Tetos & Limites das Categorias no período:\n\n` +
+            (at100.length > 0 ? `🔴 **100% do limite atingido (${at100.length}):**\n` + at100.map((c) => `• ${c.descricao}: ${formatCurrency(c.spent)} / ${formatCurrency(c.budget)} (${c.percentage}%)`).join('\n') + '\n\n' : '') +
+            (at80.length > 0 ? `🟠 **80% do limite atingido (${at80.length}):**\n` + at80.map((c) => `• ${c.descricao}: ${formatCurrency(c.spent)} / ${formatCurrency(c.budget)} (${c.percentage}%)`).join('\n') + '\n\n' : '') +
+            (at60.length > 0 ? `🟡 **60% do limite atingido (${at60.length}):**\n` + at60.map((c) => `• ${c.descricao}: ${formatCurrency(c.spent)} / ${formatCurrency(c.budget)} (${c.percentage}%)`).join('\n') : '');
+        } else {
+          reply = 'Todas as categorias com limites configurados estão operando abaixo de 60% do teto. Seu planejamento orçamentário está sob controle!';
+        }
+      } else if (lower.includes('supermercado') || lower.includes('mercado')) {
         reply = 'Neste mês de referência, os gastos com Supermercado & Feira somam R$ 684,30, representando 23% do orçamento familiar.';
       } else if (lower.includes('fatura') || lower.includes('cartão')) {
         reply = 'Seu cartão Nubank Ultravioleta tem o melhor ciclo de fechamento para hoje. Compras realizadas agora entram apenas na fatura de Setembro.';
