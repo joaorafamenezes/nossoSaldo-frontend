@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useAppStore } from '../../stores/useAppStore';
 import { Categoria } from '../../types/financial';
 import { CategoryModal } from './CategoryModal';
+import { CategoryExpensesModal } from './CategoryExpensesModal';
 import { Button } from '../../components/ui/Button';
 import {
   FolderTree,
@@ -12,6 +13,9 @@ import {
   Sparkles,
   PieChart,
   Tag,
+  Receipt,
+  ChevronRight,
+  Eye,
 } from 'lucide-react';
 import {
   formatCurrency,
@@ -35,6 +39,7 @@ export function CategoriesPage() {
 
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [categoryToEdit, setCategoryToEdit] = React.useState<Categoria | null>(null);
+  const [selectedCategoryForExpenses, setSelectedCategoryForExpenses] = React.useState<Categoria | null>(null);
 
   const startDate = dateFilterMode === 'custom' && customStartDate ? customStartDate : undefined;
   const endDate = dateFilterMode === 'custom' && customEndDate ? customEndDate : undefined;
@@ -67,12 +72,14 @@ export function CategoriesPage() {
   const totalPeriodBudget = categoriesWithStatus.reduce((sum, item) => sum + item.status.budget, 0);
   const totalPeriodSpent = categoriesWithStatus.reduce((sum, item) => sum + item.status.spent, 0);
 
-  const handleEdit = (cat: Categoria) => {
+  const handleEdit = (cat: Categoria, e: React.MouseEvent) => {
+    e.stopPropagation();
     setCategoryToEdit(cat);
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (cat: Categoria) => {
+  const handleDelete = async (cat: Categoria, e: React.MouseEvent) => {
+    e.stopPropagation();
     const attachedCount = expenses.filter((e) => e.categoriaId === cat.id).length;
     if (attachedCount > 0) {
       if (
@@ -102,7 +109,7 @@ export function CategoriesPage() {
             <span>Gerenciamento de Categorias</span>
           </h2>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Monitorando período ativo: <strong className="text-zinc-200">{periodLabel}</strong>
+            Monitorando período ativo: <strong className="text-zinc-200">{periodLabel}</strong> (clique em uma categoria para visualizar seus lançamentos)
           </p>
         </div>
 
@@ -150,23 +157,32 @@ export function CategoriesPage() {
 
           const borderAlertClass =
             status.alertLevel === 'danger'
-              ? 'border-rose-500/40 bg-rose-950/15 shadow-rose-500/5'
+              ? 'border-rose-500/40 bg-rose-950/15 shadow-rose-500/5 hover:border-rose-500/70'
               : status.alertLevel === 'orange'
-              ? 'border-orange-500/40 bg-zinc-900/60 shadow-orange-500/5'
+              ? 'border-orange-500/40 bg-zinc-900/60 shadow-orange-500/5 hover:border-orange-500/70'
               : status.alertLevel === 'yellow'
-              ? 'border-amber-500/40 bg-zinc-900/60 shadow-amber-500/5'
+              ? 'border-amber-500/40 bg-zinc-900/60 shadow-amber-500/5 hover:border-amber-500/70'
               : 'border-zinc-800/90 bg-zinc-900/60 hover:border-zinc-700';
 
           return (
             <div
               key={category.id}
-              className={`rounded-2xl border p-5 flex flex-col justify-between space-y-4 transition-all duration-200 ${borderAlertClass}`}
+              onClick={() => setSelectedCategoryForExpenses(category)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setSelectedCategoryForExpenses(category);
+                }
+              }}
+              className={`group rounded-2xl border p-5 flex flex-col justify-between space-y-4 transition-all duration-200 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 outline-none focus:ring-2 focus:ring-emerald-500/50 ${borderAlertClass}`}
             >
               {/* Top Row: Icon, Name, Color dot, Actions */}
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-2xl border border-white/10 shadow-sm"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl text-2xl border border-white/10 shadow-sm group-hover:scale-105 transition-transform"
                     style={{ backgroundColor: `${category.color || category.cor || '#10b981'}25` }}
                   >
                     <span>{category.iconName || '🏷️'}</span>
@@ -178,7 +194,7 @@ export function CategoriesPage() {
                         className="h-2.5 w-2.5 rounded-full shrink-0"
                         style={{ backgroundColor: category.color || category.cor || '#10b981' }}
                       />
-                      <h4 className="text-sm font-bold text-zinc-100 truncate">
+                      <h4 className="text-sm font-bold text-zinc-100 truncate group-hover:text-emerald-300 transition-colors">
                         {category.descricao}
                       </h4>
                     </div>
@@ -191,14 +207,14 @@ export function CategoriesPage() {
                 {/* Edit & Delete */}
                 <div className="flex items-center gap-1 shrink-0">
                   <button
-                    onClick={() => handleEdit(category)}
+                    onClick={(e) => handleEdit(category, e)}
                     className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
                     title="Editar Categoria"
                   >
                     <Edit3 className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => handleDelete(category)}
+                    onClick={(e) => handleDelete(category, e)}
                     className="rounded-lg p-1.5 text-zinc-400 hover:bg-rose-950/40 hover:text-rose-400 transition-colors"
                     title="Excluir Categoria"
                   >
@@ -272,6 +288,19 @@ export function CategoriesPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Bottom Quick Action: Visualizar Lançamentos */}
+              <div className="pt-2 border-t border-zinc-800/60 flex items-center justify-between text-xs text-zinc-400 group-hover:text-emerald-400 transition-colors">
+                <span className="flex items-center gap-1.5 text-[11px] font-medium">
+                  <Receipt className="h-3.5 w-3.5" />
+                  <span>
+                    {itemCount === 0
+                      ? 'Nenhum lançamento no período'
+                      : `Visualizar ${itemCount} ${itemCount === 1 ? 'lançamento' : 'lançamentos'}`}
+                  </span>
+                </span>
+                <ChevronRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
+              </div>
             </div>
           );
         })}
@@ -284,6 +313,12 @@ export function CategoriesPage() {
           setCategoryToEdit(null);
         }}
         categoryToEdit={categoryToEdit}
+      />
+
+      <CategoryExpensesModal
+        isOpen={Boolean(selectedCategoryForExpenses)}
+        onClose={() => setSelectedCategoryForExpenses(null)}
+        category={selectedCategoryForExpenses}
       />
     </div>
   );
