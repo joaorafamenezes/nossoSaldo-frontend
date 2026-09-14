@@ -380,50 +380,9 @@ export function ExpenseFilters({
               title={`Gastos a pagar no final do mês (dias 15 a ${lastDay})`}
             >
               <span>🌔 2ª Quinzena</span>
-              <span className="opacity-70 text-[10px] font-mono">(15 a ${lastDay})</span>
+              <span className="opacity-70 text-[10px] font-mono">(15 a {lastDay})</span>
             </button>
           </div>
-        </div>
-
-        {/* Right side: Date Inputs for De / Até and Limpar button */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-slate-500 dark:text-zinc-400 font-medium">De:</span>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => {
-                onStartDateChange(e.target.value);
-                onPeriodPresetChange('custom');
-              }}
-              className="h-8 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 text-xs text-slate-800 dark:text-zinc-200 outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
-            />
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] text-slate-500 dark:text-zinc-400 font-medium">Até:</span>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => {
-                onEndDateChange(e.target.value);
-                onPeriodPresetChange('custom');
-              }}
-              className="h-8 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-2 text-xs text-slate-800 dark:text-zinc-200 outline-none focus:ring-1 focus:ring-emerald-500 font-mono"
-            />
-          </div>
-
-          {isPeriodFiltered && (
-            <button
-              type="button"
-              onClick={handleClearDates}
-              className="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-100 flex items-center gap-1 transition-colors text-[11px]"
-              title="Limpar filtro de período"
-            >
-              <X className="h-3.5 w-3.5" />
-              <span>Limpar</span>
-            </button>
-          )}
         </div>
       </div>
     </div>

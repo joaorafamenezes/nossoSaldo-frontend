@@ -70,11 +70,11 @@ export function getDaysDifference(targetDateStr: string): number {
  */
 export function getEffectiveExpenseValue(
   expense: {
-    valor: number;
+    valor?: number;
     origemLancamento?: string;
     numeroParcelas?: number;
     lancamentosBase?: Array<{
-      valorParcela: number;
+      valorParcela?: number;
       competencia?: string;
       dataVencimentoParcela?: string;
       faturaCartaoCompetencia?: string;
@@ -373,16 +373,19 @@ export function getExpensesForCompetence<T extends {
 
     const descClean = (item.descricao || '').trim().toLowerCase();
     const seriesKey = item.recorrenciaPaiId || `rec_${descClean}_${item.categoriaId || ''}_${item.responsavelId || ''}`;
+    const itemMonth = (item.competencia || item.dataVencimento || '').substring(0, 7) || selectedCompetencia;
+    const mapKey = startDate || endDate ? `${seriesKey}_${itemMonth}` : seriesKey;
+
     const isExactMonth =
       (item.competencia && item.competencia.startsWith(selectedCompetencia)) ||
       (item.dataVencimento && item.dataVencimento.startsWith(selectedCompetencia));
 
-    const existing = recurringMap.get(seriesKey);
+    const existing = recurringMap.get(mapKey);
     if (!existing) {
-      recurringMap.set(seriesKey, item);
+      recurringMap.set(mapKey, item);
     } else if (isExactMonth) {
       // Prioriza o registro físico cadastrado especificamente para este mês
-      recurringMap.set(seriesKey, item);
+      recurringMap.set(mapKey, item);
     }
   }
 
@@ -589,5 +592,172 @@ export function calculateCardDueDate(
   const formattedDay = String(safeDueDay).padStart(2, '0');
 
   return `${dueYear}-${formattedMonth}-${formattedDay}`;
+}
+
+export type CategoryBudgetAlertLevel = 'normal' | 'yellow' | 'orange' | 'danger';
+
+export interface CategoryBudgetStatus {
+  categoriaId: string;
+  descricao: string;
+  iconName: string;
+  color: string;
+  spent: number;
+  budget: number;
+  monthlyBudget: number;
+  monthMultiplier: number;
+  percentage: number;
+  alertLevel: CategoryBudgetAlertLevel;
+  label: string;
+  badgeClass: string;
+  progressClass: string;
+}
+
+/**
+ * Calcula o status de orçamento/teto de uma categoria para o período ou competência selecionada.
+ * - Suporta períodos de 1 mês, quinzenas ou múltiplos meses (ex: 3 meses, 6 meses, anual).
+ * - Em períodos multi-mês (> 35 dias), o teto orçamentário é multiplicado proporcionalmente ao número de meses
+ *   para evitar falsos estouros e manter a consistência financeira.
+ * - 60% a 79%: Alerta Amarelo (60% do limite)
+ * - 80% a 99%: Alerta Laranja (80% do limite)
+ * - 100% ou mais: Alerta Vermelho (100% do limite)
+ */
+export function getCategoryBudgetStatus(
+  category: {
+    id: string;
+    descricao: string;
+    iconName?: string;
+    color?: string;
+    cor?: string;
+    teto?: number | null;
+    orcamentoMensal?: number | null;
+  },
+  expenses: Array<{
+    categoriaId?: string;
+    tipo?: string;
+    status?: string;
+    valor?: number;
+    competencia?: string;
+    dataVencimento?: string;
+    origemLancamento?: string;
+    lancamentosBase?: Array<{
+      competencia?: string;
+      dataVencimentoParcela?: string;
+      valorParcela?: number;
+      status?: string;
+    }>;
+  }>,
+  selectedCompetencia?: string,
+  startDate?: string,
+  endDate?: string
+): CategoryBudgetStatus {
+  const monthlyBudget = Number(category.teto ?? category.orcamentoMensal ?? 0);
+  const color = category.cor || category.color || '#10b981';
+  const iconName = category.iconName || '🏷️';
+
+  // Multiplicador de meses em caso de períodos que abrangem múltiplos meses
+  let monthMultiplier = 1;
+  if (startDate && endDate) {
+    const start = new Date(startDate + 'T00:00:00');
+    const end = new Date(endDate + 'T00:00:00');
+    const diffDays = Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    if (diffDays > 35) {
+      const startYear = start.getFullYear();
+      const startMonth = start.getMonth();
+      const endYear = end.getFullYear();
+      const endMonth = end.getMonth();
+      const exactMonths = (endYear - startYear) * 12 + (endMonth - startMonth) + 1;
+      monthMultiplier = Math.max(1, exactMonths > 0 ? exactMonths : Math.round(diffDays / 30.4375));
+    }
+  }
+
+  const budget = monthlyBudget * monthMultiplier;
+
+  const categoryExpenses = expenses.filter((e) => {
+    if (e.categoriaId !== category.id || e.tipo !== 'despesa' || e.status === 'cancelado') {
+      return false;
+    }
+    if (startDate || endDate) {
+      const dueDate = (e.dataVencimento || e.competencia || '').split('T')[0];
+      if (startDate && dueDate && dueDate < startDate) return false;
+      if (endDate && dueDate && dueDate > endDate) return false;
+    }
+    return true;
+  });
+
+  const spent = categoryExpenses.reduce(
+    (sum, e) => sum + getEffectiveExpenseValue(e, selectedCompetencia, startDate, endDate),
+    0
+  );
+
+  const percentage = budget > 0 ? Math.round((spent / budget) * 100) : 0;
+
+  let alertLevel: CategoryBudgetAlertLevel = 'normal';
+  let label = 'Dentro da meta';
+  let badgeClass = 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30';
+  let progressClass = 'bg-emerald-500';
+
+  if (budget > 0) {
+    if (percentage >= 100) {
+      alertLevel = 'danger';
+      label = '100% do limite atingido';
+      badgeClass = 'bg-rose-500/20 text-rose-400 border-rose-500/30';
+      progressClass = 'bg-rose-500';
+    } else if (percentage >= 80) {
+      alertLevel = 'orange';
+      label = '80% do limite atingido';
+      badgeClass = 'bg-orange-500/20 text-orange-400 border-orange-500/30';
+      progressClass = 'bg-orange-500';
+    } else if (percentage >= 60) {
+      alertLevel = 'yellow';
+      label = '60% do limite atingido';
+      badgeClass = 'bg-amber-400/20 text-amber-300 border-amber-400/30';
+      progressClass = 'bg-amber-400';
+    }
+  }
+
+  return {
+    categoriaId: category.id,
+    descricao: category.descricao,
+    iconName,
+    color,
+    spent,
+    budget,
+    monthlyBudget,
+    monthMultiplier,
+    percentage,
+    alertLevel,
+    label,
+    badgeClass,
+    progressClass,
+  };
+}
+
+/**
+ * Retorna todas as categorias que atingiram 60%, 80% ou 100% do seu limite,
+ * ordenadas por percentual atingido decrescente.
+ */
+export function getCategoryBudgetAlerts(
+  categories: Array<{
+    id: string;
+    descricao: string;
+    iconName?: string;
+    color?: string;
+    cor?: string;
+    teto?: number | null;
+    orcamentoMensal?: number | null;
+  }>,
+  expenses: Array<any>,
+  selectedCompetencia?: string,
+  startDate?: string,
+  endDate?: string
+): CategoryBudgetStatus[] {
+  const monthExpenses = getExpensesForCompetence(expenses, selectedCompetencia || '', startDate, endDate);
+
+  const statuses = categories
+    .filter((c) => Number(c.teto ?? c.orcamentoMensal ?? 0) > 0)
+    .map((c) => getCategoryBudgetStatus(c, monthExpenses, selectedCompetencia, startDate, endDate))
+    .filter((s) => s.alertLevel !== 'normal');
+
+  return statuses.sort((a, b) => b.percentage - a.percentage);
 }
 

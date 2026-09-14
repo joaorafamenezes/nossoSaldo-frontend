@@ -87,25 +87,10 @@ describe('ExpenseFilters - Quinzena & Período (Critério 001)', () => {
     expect(props.onEndDateChange).toHaveBeenCalledWith('');
   });
 
-  it('permite definir período personalizado via inputs de data', () => {
-    const props = {
-      ...defaultProps,
-      onStartDateChange: vi.fn(),
-      onEndDateChange: vi.fn(),
-      onPeriodPresetChange: vi.fn(),
-    };
-    const { container } = render(<ExpenseFilters {...props} />);
-
+  it('não exibe mais inputs manuais de De e Até dentro de Gastos e Receitas', () => {
+    const { container } = render(<ExpenseFilters {...defaultProps} />);
     const dateInputs = container.querySelectorAll('input[type="date"]');
-    expect(dateInputs.length).toBe(2);
-
-    fireEvent.change(dateInputs[0], { target: { value: '2026-09-01' } });
-    expect(props.onStartDateChange).toHaveBeenCalledWith('2026-09-01');
-    expect(props.onPeriodPresetChange).toHaveBeenCalledWith('custom');
-
-    fireEvent.change(dateInputs[1], { target: { value: '2026-09-14' } });
-    expect(props.onEndDateChange).toHaveBeenCalledWith('2026-09-14');
-    expect(props.onPeriodPresetChange).toHaveBeenCalledWith('custom');
+    expect(dateInputs.length).toBe(0);
   });
 
   it('filtra corretamente gastos da 1ª quinzena (01 a 14) vs 2ª quinzena (15 a 30) (Critério 001)', () => {

@@ -4,6 +4,7 @@ import { StatCard } from '../../components/common/StatCard';
 import { CashflowChart } from './CashflowChart';
 import { UpcomingBillsTimeline } from './UpcomingBillsTimeline';
 import { QuickCardsWidget } from './QuickCardsWidget';
+import { CategoryBudgetAlertsWidget } from './CategoryBudgetAlertsWidget';
 import { AiSummaryBanner } from './AiSummaryBanner';
 import {
   TrendingUp,
@@ -15,11 +16,23 @@ import {
   Users2,
   Sparkles,
 } from 'lucide-react';
-import { getCompetenciaDisplay, isDevEnvironment } from '../../lib/utils';
+import { getCompetenciaDisplay, formatDate, isDevEnvironment } from '../../lib/utils';
 
 export function DashboardOverview() {
-  const { getResumoCompetencia, selectedCompetencia, jointInfo } = useAppStore();
+  const {
+    getResumoCompetencia,
+    selectedCompetencia,
+    dateFilterMode,
+    customStartDate,
+    customEndDate,
+    jointInfo,
+  } = useAppStore();
   const resumo = getResumoCompetencia();
+
+  const isCustomRange = dateFilterMode === 'custom' && Boolean(customStartDate && customEndDate);
+  const periodLabel = isCustomRange
+    ? `${formatDate(customStartDate)} até ${formatDate(customEndDate)}`
+    : getCompetenciaDisplay(selectedCompetencia);
 
   return (
     <div className="space-y-6">
@@ -30,7 +43,7 @@ export function DashboardOverview() {
             Painel Financeiro 360°
           </h2>
           <p className="text-xs text-zinc-400 mt-0.5">
-            Visão consolidada para <strong className="text-zinc-200">{getCompetenciaDisplay(selectedCompetencia)}</strong>
+            Visão consolidada para <strong className="text-zinc-200">{periodLabel}</strong>
           </p>
         </div>
 
@@ -88,8 +101,9 @@ export function DashboardOverview() {
         <UpcomingBillsTimeline />
       </div>
 
-      {/* Bottom widgets: Cards & Quick summaries */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Bottom widgets: Alerts, Cards & Quick summaries */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <CategoryBudgetAlertsWidget />
         <QuickCardsWidget />
 
         {/* Joint account mini widget / Individual financial summary */}

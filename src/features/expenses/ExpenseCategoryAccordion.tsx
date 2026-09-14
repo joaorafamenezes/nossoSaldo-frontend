@@ -6,7 +6,14 @@ import { CategoryBadge } from '../../components/common/CategoryBadge';
 import { ExpenseStatusModal } from './ExpenseStatusModal';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { formatDate, formatCurrency, getDaysDifference, getEffectiveExpenseValue, getEffectiveExpenseStatus } from '../../lib/utils';
+import {
+  formatDate,
+  formatCurrency,
+  getDaysDifference,
+  getEffectiveExpenseValue,
+  getEffectiveExpenseStatus,
+  getCategoryBudgetStatus,
+} from '../../lib/utils';
 import {
   ChevronDown,
   ChevronRight,
@@ -28,12 +35,16 @@ interface ExpenseCategoryAccordionProps {
   expenses: Gasto[];
   selectedIds: string[];
   onToggleSelect: (id: string) => void;
+  startDate?: string;
+  endDate?: string;
 }
 
 export function ExpenseCategoryAccordion({
   expenses,
   selectedIds,
   onToggleSelect,
+  startDate,
+  endDate,
 }: ExpenseCategoryAccordionProps) {
   const { categories, selectedCompetencia, toggleExpenseStatus, toggleInstallmentStatus, openEditExpense, deleteExpense } = useAppStore();
   const [expandedParcelas, setExpandedParcelas] = React.useState<Record<string, boolean>>({});
@@ -62,12 +73,12 @@ export function ExpenseCategoryAccordion({
       }
       const group = map.get(catId)!;
       group.items.push(expense);
-      group.total += getEffectiveExpenseValue(expense, selectedCompetencia);
+      group.total += getEffectiveExpenseValue(expense, selectedCompetencia, startDate, endDate);
     });
 
     // Sort categories by total value descending
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
-  }, [expenses, categories, selectedCompetencia]);
+  }, [expenses, categories, selectedCompetencia, startDate, endDate]);
 
   // Track expanded state of category accordions (all open by default)
   const [expandedCategories, setExpandedCategories] = React.useState<Record<string, boolean>>(() => {
@@ -176,24 +187,39 @@ export function ExpenseCategoryAccordion({
           const isExpanded = expandedCategories[catId] ?? true;
           const catColor = category?.cor || category?.color || '#10b981';
           const catIcon = category?.iconName || '🏷️';
+          const budgetStatus = category
+            ? getCategoryBudgetStatus(category, items, selectedCompetencia, startDate, endDate)
+            : null;
+          const hasBudget = Boolean(budgetStatus && budgetStatus.budget > 0);
+          const alertLevel = budgetStatus?.alertLevel || 'normal';
+
+          const borderAlertClass =
+            alertLevel === 'danger'
+              ? 'border-rose-500/40 shadow-rose-500/5'
+              : alertLevel === 'orange'
+              ? 'border-orange-500/40 shadow-orange-500/5'
+              : alertLevel === 'yellow'
+              ? 'border-amber-500/40 shadow-amber-500/5'
+              : 'border-slate-200 dark:border-zinc-800/90';
 
           return (
             <div
               key={catId}
-              className="overflow-hidden rounded-2xl border border-slate-200 dark:border-zinc-800/90 bg-white dark:bg-zinc-950/70 backdrop-blur-sm transition-all duration-200 shadow-sm dark:shadow-md"
+              className={`overflow-hidden rounded-2xl border ${borderAlertClass} bg-white dark:bg-zinc-950/70 backdrop-blur-sm transition-all duration-200 shadow-sm dark:shadow-md`}
             >
               {/* Category Header Row */}
               <div
                 onClick={() => toggleCategory(catId)}
-                className="flex items-center justify-between p-4 cursor-pointer hover:bg-slate-50 dark:hover:bg-zinc-900/60 transition-colors select-none"
+                className="flex flex-col md:flex-row md:items-center justify-between p-4 gap-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-zinc-900/60 transition-colors select-none"
               >
-                <div className="flex items-center gap-3.5">
+                <div className="flex items-center gap-3.5 min-w-0">
                   <button
                     className="p-1 rounded-lg text-slate-400 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-white transition-colors"
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleCategory(catId);
                     }}
+                    title={isExpanded ? 'Recolher categoria' : 'Expandir categoria'}
                   >
                     {isExpanded ? (
                       <ChevronDown className="h-4 w-4 text-slate-600 dark:text-zinc-400" />
@@ -213,13 +239,13 @@ export function ExpenseCategoryAccordion({
                     <span>{catIcon}</span>
                   </div>
 
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-bold text-slate-900 dark:text-zinc-100 flex items-center gap-2 truncate">
                       <span
                         className="h-2.5 w-2.5 rounded-full shrink-0 shadow-xs"
                         style={{ backgroundColor: catColor }}
                       />
-                      <span>{category?.descricao}</span>
+                      <span className="truncate">{category?.descricao}</span>
                     </h3>
                     <p className="text-[11px] text-slate-500 dark:text-zinc-400 font-mono mt-0.5">
                       {items.length} {items.length === 1 ? 'registro' : 'registros'}
@@ -227,8 +253,74 @@ export function ExpenseCategoryAccordion({
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <MoneyDisplay value={total} type="neutral" size="lg" />
+                {/* Right section: Progress bar + Alert Badge + Total Value */}
+                <div className="flex items-center justify-between md:justify-end gap-4 pl-9 md:pl-0 flex-wrap sm:flex-nowrap">
+                  <div className="flex items-center gap-3">
+                    {/* Horizontal progress bar container */}
+                    <div className="flex flex-col items-start md:items-end gap-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-24 sm:w-36 md:w-44 bg-slate-200 dark:bg-zinc-800 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${
+                              hasBudget && budgetStatus
+                                ? budgetStatus.progressClass
+                                : 'bg-slate-300 dark:bg-zinc-700'
+                            }`}
+                            style={{
+                              width: hasBudget && budgetStatus ? `${Math.min(budgetStatus.percentage, 100)}%` : '0%',
+                            }}
+                          />
+                        </div>
+
+                        {/* Alert badge right after the horizontal bar */}
+                        {hasBudget && budgetStatus ? (
+                          budgetStatus.percentage >= 60 ? (
+                            <span
+                              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-mono font-bold uppercase tracking-wider shrink-0 ${budgetStatus.badgeClass}`}
+                            >
+                              {budgetStatus.alertLevel === 'danger' && '⛔ '}
+                              {budgetStatus.alertLevel === 'orange' && '🚨 '}
+                              {budgetStatus.alertLevel === 'yellow' && '⚠️ '}
+                              {budgetStatus.percentage >= 100
+                                ? '100% do limite'
+                                : budgetStatus.percentage >= 80
+                                ? '80% do limite'
+                                : '60% do limite'}
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-mono font-medium text-slate-500 dark:text-zinc-400 shrink-0">
+                              {budgetStatus.percentage}%
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-[10px] font-mono text-slate-400 dark:text-zinc-500 shrink-0">
+                            Sem teto
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="text-[10px] font-mono text-slate-500 dark:text-zinc-400">
+                        {hasBudget && budgetStatus ? (
+                          <>
+                            {formatCurrency(total)} de {formatCurrency(budgetStatus.budget)}
+                            {budgetStatus.monthMultiplier > 1 && (
+                              <span className="text-zinc-400 dark:text-zinc-500 font-normal">
+                                {' '}({budgetStatus.monthMultiplier} meses)
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {formatCurrency(total)} (sem teto definido)
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <MoneyDisplay value={total} type="neutral" size="lg" />
+                  </div>
                 </div>
               </div>
 
@@ -238,8 +330,8 @@ export function ExpenseCategoryAccordion({
                   {items.map((expense) => {
                     const isSelected = selectedIds.includes(expense.id);
                     const isParcelado = expense.origemLancamento === 'parcelado' || (expense.lancamentosBase && expense.lancamentosBase.length > 0) || ((expense.numeroParcelas || 0) > 1);
-                    const effectiveVal = getEffectiveExpenseValue(expense, selectedCompetencia);
-                    const { effectiveStatus, effectiveDueDate, isPaid, isOverdue, daysDiff } = getEffectiveExpenseStatus(expense, selectedCompetencia);
+                    const effectiveVal = getEffectiveExpenseValue(expense, selectedCompetencia, startDate, endDate);
+                    const { effectiveStatus, effectiveDueDate, isPaid, isOverdue, daysDiff } = getEffectiveExpenseStatus(expense, selectedCompetencia, startDate, endDate);
 
                     return (
                       <div

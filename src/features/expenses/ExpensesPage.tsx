@@ -22,6 +22,9 @@ export function ExpensesPage() {
     expenses,
     jointInfo,
     selectedCompetencia,
+    dateFilterMode,
+    customStartDate,
+    customEndDate,
     openNewExpense,
     batchToggleStatus,
     batchDeleteExpenses,
@@ -41,6 +44,16 @@ export function ExpensesPage() {
   const [viewMode, setViewMode] = React.useState<'category' | 'table' | 'grid'>('category');
   const [selectedIds, setSelectedIds] = React.useState<string[]>([]);
 
+  // Effective active dates considering global custom date filter or local quinzena
+  const effectiveStartDate =
+    periodPreset === 'all' && dateFilterMode === 'custom' && customStartDate
+      ? customStartDate
+      : startDate;
+  const effectiveEndDate =
+    periodPreset === 'all' && dateFilterMode === 'custom' && customEndDate
+      ? customEndDate
+      : endDate;
+
   // Synchronize / adapt period dates whenever the competence changes
   React.useEffect(() => {
     if (periodPreset === 'all') {
@@ -55,23 +68,18 @@ export function ExpensesPage() {
       const lastDay = new Date(Number(year), Number(month), 0).getDate();
       setStartDate(`${year}-${month}-15`);
       setEndDate(`${year}-${month}-${String(lastDay).padStart(2, '0')}`);
-    } else if (periodPreset === 'custom') {
-      // If custom dates belong to a different month than selectedCompetencia, reset to all
-      if (
-        (startDate && !startDate.startsWith(selectedCompetencia)) ||
-        (endDate && !endDate.startsWith(selectedCompetencia))
-      ) {
-        setPeriodPreset('all');
-        setStartDate('');
-        setEndDate('');
-      }
     }
   }, [selectedCompetencia]);
 
   // Filter and deduplicate expenses strictly by selected competence / date range, search, joint account responsible and credit card
   const filteredExpenses = React.useMemo(() => {
     const todayStr = new Date().toISOString().split('T')[0];
-    const competenceExpenses = getExpensesForCompetence(expenses, selectedCompetencia, startDate, endDate);
+    const competenceExpenses = getExpensesForCompetence(
+      expenses,
+      selectedCompetencia,
+      effectiveStartDate,
+      effectiveEndDate
+    );
 
     return competenceExpenses.filter((item) => {
       if (searchQuery) {
@@ -248,6 +256,8 @@ export function ExpensesPage() {
           expenses={filteredExpenses}
           selectedIds={selectedIds}
           onToggleSelect={handleToggleSelect}
+          startDate={effectiveStartDate}
+          endDate={effectiveEndDate}
         />
       ) : viewMode === 'table' ? (
         <ExpenseTable
