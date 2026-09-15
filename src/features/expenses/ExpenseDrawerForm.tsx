@@ -3,6 +3,7 @@ import { useAppStore } from '../../stores/useAppStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import { TipoGasto, OrigemLancamento, StatusGasto, Gasto } from '../../types/financial';
 import { CategoryModal } from '../categories/CategoryModal';
+import { RecurringScopeModal, RecurringEditScope } from './RecurringScopeModal';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { X, Sparkles, Plus, Calendar, CreditCard, Tag, User, Layers, CheckCircle2, Clock } from 'lucide-react';
@@ -26,6 +27,8 @@ export function ExpenseDrawerForm() {
   const { user } = useAuthStore();
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = React.useState(false);
+  const [isScopeModalOpen, setIsScopeModalOpen] = React.useState(false);
+  const [pendingRecurringPayload, setPendingRecurringPayload] = React.useState<any | null>(null);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [descricao, setDescricao] = React.useState('');
   const [valor, setValor] = React.useState('');
@@ -82,6 +85,35 @@ export function ExpenseDrawerForm() {
     }
   };
 
+  const handleConfirmScope = async (scope: RecurringEditScope) => {
+    if (!editingExpense || !pendingRecurringPayload) return;
+
+    setIsSubmitting(true);
+    try {
+      await updateExpense(editingExpense.id, {
+        ...pendingRecurringPayload,
+        escopoEdicao: scope,
+        targetCompetencia: selectedCompetencia,
+      });
+
+      if (scope === 'THIS_ONLY') {
+        toast.success('Alteração aplicada exclusivamente para este mês!');
+      } else if (scope === 'THIS_AND_FUTURE') {
+        toast.success('Reajuste aplicado deste mês em diante!');
+      } else {
+        toast.success('Recorrência atualizada em toda a série!');
+      }
+
+      setIsScopeModalOpen(false);
+      setPendingRecurringPayload(null);
+      closeExpenseDrawer();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao salvar alteração da recorrência.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!descricao.trim() || parsedValor <= 0) {
@@ -120,6 +152,13 @@ export function ExpenseDrawerForm() {
       dataInicioRecorrencia: origemLancamento === 'recorrente' ? dueDate : undefined,
       dataFimRecorrencia: undefined,
     };
+
+    // Se estiver editando uma recorrência e mantendo ela como recorrente, abre o modal de escopo
+    if (editingExpense && editingExpense.origemLancamento === 'recorrente' && origemLancamento === 'recorrente') {
+      setPendingRecurringPayload(expensePayload);
+      setIsScopeModalOpen(true);
+      return;
+    }
 
     setIsSubmitting(true);
     try {
@@ -457,6 +496,18 @@ export function ExpenseDrawerForm() {
       <CategoryModal
         isOpen={isCategoryModalOpen}
         onClose={() => setIsCategoryModalOpen(false)}
+      />
+
+      <RecurringScopeModal
+        isOpen={isScopeModalOpen}
+        onClose={() => {
+          setIsScopeModalOpen(false);
+          setPendingRecurringPayload(null);
+        }}
+        onConfirm={handleConfirmScope}
+        competencia={selectedCompetencia || (editingExpense?.competencia ? editingExpense.competencia.substring(0, 7) : '2026-09')}
+        descricao={descricao}
+        isSubmitting={isSubmitting}
       />
     </div>
   );

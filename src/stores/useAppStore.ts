@@ -668,6 +668,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (updates.observacao !== undefined) payload.observacao = updates.observacao;
       if (updates.categoriaId !== undefined) payload.categoriaId = updates.categoriaId;
       if (updates.cartaoCreditoId !== undefined) payload.cartaoCreditoId = updates.cartaoCreditoId || null;
+      if (updates.escopoEdicao !== undefined) payload.escopoEdicao = updates.escopoEdicao;
+      if (updates.targetCompetencia !== undefined) payload.targetCompetencia = updates.targetCompetencia;
 
       await api.updateExpense(token, id, payload);
       await get().loadApiData(token);
@@ -676,13 +678,50 @@ export const useAppStore = create<AppState>((set, get) => ({
         const existing = state.expenses.find((e) => e.id === id);
         if (!existing) return state;
 
+        const targetOrigem = updates.origemLancamento || existing.origemLancamento;
+        const escopo = updates.escopoEdicao || 'THIS_AND_FUTURE';
+        const targetComp = updates.targetCompetencia || get().selectedCompetencia || (updates.dataVencimento || existing.dataVencimento || '').substring(0, 7) || '2026-09';
+        const seriesKey = existing.recorrenciaPaiId || existing.id;
+
+        if (targetOrigem === 'recorrente' && escopo === 'THIS_ONLY') {
+          // Apenas este mês específico
+          const isExactMonth = existing.competencia?.startsWith(targetComp);
+
+          if (isExactMonth) {
+            const updated = {
+              ...existing,
+              ...updates,
+              updatedAt: new Date().toISOString(),
+            };
+            return {
+              expenses: state.expenses.map((e) => (e.id === id ? updated : e)),
+            };
+          } else {
+            // Materializa um novo registro para este mês específico mantendo o root intacto
+            const targetDueParts = (updates.dataVencimento || existing.dataVencimento || '2026-09-15').split('-');
+            const customDueDate = `${targetComp}-${targetDueParts[2] || '15'}`;
+            const materializedItem: Gasto = {
+              ...existing,
+              ...updates,
+              id: `gst-rec-${seriesKey}-${targetComp}`,
+              recorrenciaPaiId: seriesKey,
+              competencia: `${targetComp}-01`,
+              dataVencimento: customDueDate,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+
+            return {
+              expenses: [materializedItem, ...state.expenses],
+            };
+          }
+        }
+
         const updatedExpense: Gasto = {
           ...existing,
           ...updates,
           updatedAt: new Date().toISOString(),
         };
-
-        const targetOrigem = updates.origemLancamento || existing.origemLancamento;
 
         if (targetOrigem === 'parcelado') {
           const numParcelas = updates.numeroParcelas || existing.numeroParcelas || 2;
@@ -724,19 +763,34 @@ export const useAppStore = create<AppState>((set, get) => ({
           updatedExpense.origemLancamento = 'recorrente';
           updatedExpense.numeroParcelas = 1;
           updatedExpense.lancamentosBase = undefined;
-          updatedExpense.recorrenciaPaiId = undefined;
-          updatedExpense.dataInicioRecorrencia = updates.dataVencimento || existing.dataVencimento || new Date().toISOString().split('T')[0];
+          updatedExpense.dataInicioRecorrencia = updates.dataInicioRecorrencia || updates.dataVencimento || existing.dataInicioRecorrencia || existing.dataVencimento;
         }
 
-        // Clean up any child recurring items if parent was transformed
-        const filteredExpenses = state.expenses.filter((e) => {
-          if (e.id === id) return false;
-          if (targetOrigem !== 'recorrente' && e.recorrenciaPaiId === id) return false;
-          return true;
+        // Clean up or cascade updates
+        let nextExpenses = state.expenses.map((e) => {
+          if (e.id === id) return updatedExpense;
+          if (targetOrigem === 'recorrente' && (e.recorrenciaPaiId === seriesKey || e.id === seriesKey)) {
+            const eComp = e.competencia?.substring(0, 7) || '';
+            if (escopo === 'ALL_SERIES' || (escopo === 'THIS_AND_FUTURE' && eComp >= targetComp)) {
+              return {
+                ...e,
+                valor: updates.valor !== undefined ? Number(updates.valor) : e.valor,
+                descricao: updates.descricao !== undefined ? updates.descricao : e.descricao,
+                categoriaId: updates.categoriaId !== undefined ? updates.categoriaId : e.categoriaId,
+                cartaoCreditoId: updates.cartaoCreditoId !== undefined ? updates.cartaoCreditoId : e.cartaoCreditoId,
+                updatedAt: new Date().toISOString(),
+              };
+            }
+          }
+          return e;
         });
 
+        if (targetOrigem !== 'recorrente') {
+          nextExpenses = nextExpenses.filter((e) => !(e.recorrenciaPaiId === id));
+        }
+
         return {
-          expenses: [updatedExpense, ...filteredExpenses],
+          expenses: nextExpenses,
         };
       });
     }

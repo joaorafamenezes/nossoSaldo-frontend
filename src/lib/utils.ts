@@ -43,16 +43,70 @@ export function formatShortDate(dateString?: string): string {
   }).format(date).replace('.', '');
 }
 
+export const MONTH_NAMES_PT = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+];
+
+export const MONTH_ABBR_PT = [
+  'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+  'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
+];
+
+export function getCurrentCompetencia(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+export function parseCompetencia(competencia: string): { year: number; month: number } {
+  if (!competencia) {
+    const now = new Date();
+    return { year: now.getFullYear(), month: now.getMonth() + 1 };
+  }
+  const parts = competencia.split('-');
+  return {
+    year: parseInt(parts[0], 10) || new Date().getFullYear(),
+    month: parseInt(parts[1], 10) || 1,
+  };
+}
+
+export function formatCompetencia(year: number, month: number): string {
+  const safeMonth = Math.max(1, Math.min(12, month));
+  return `${year}-${String(safeMonth).padStart(2, '0')}`;
+}
+
+export function shiftCompetencia(competencia: string, deltaMonths: number): string {
+  const { year, month } = parseCompetencia(competencia);
+  const totalMonths = year * 12 + (month - 1) + deltaMonths;
+  const newYear = Math.floor(totalMonths / 12);
+  const newMonth = (totalMonths % 12) + 1;
+  return formatCompetencia(newYear, newMonth);
+}
+
+export function getPreviousCompetencia(competencia: string): string {
+  return shiftCompetencia(competencia, -1);
+}
+
+export function getNextCompetencia(competencia: string): string {
+  return shiftCompetencia(competencia, 1);
+}
+
 export function getCompetenciaDisplay(competencia: string): string {
   if (!competencia) return '';
-  const parts = competencia.split('-');
-  const year = parts[0];
-  const month = parseInt(parts[1], 10);
-  const monthNames = [
-    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-  ];
-  return `${monthNames[month - 1]} de ${year}`;
+  const { year, month } = parseCompetencia(competencia);
+  return `${MONTH_NAMES_PT[month - 1]} de ${year}`;
+}
+
+export function getCompetenciaShort(competencia: string): string {
+  if (!competencia) return '';
+  const { year, month } = parseCompetencia(competencia);
+  return `${MONTH_ABBR_PT[month - 1]}/${String(year).slice(-2)}`;
+}
+
+export function isCurrentCompetencia(competencia: string): boolean {
+  return competencia === getCurrentCompetencia();
 }
 
 export function getDaysDifference(targetDateStr: string): number {
