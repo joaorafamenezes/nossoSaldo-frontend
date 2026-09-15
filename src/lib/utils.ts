@@ -293,9 +293,41 @@ export function getEffectiveExpenseStatus(
 }
 
 /**
- * Filtra e deduplica lançamentos para a competência selecionada.
+ * Retorna todos os meses (formato YYYY-MM) compreendidos em um intervalo de datas YYYY-MM-DD.
+ */
+export function getMonthsBetweenDates(startDate: string, endDate: string): string[] {
+  const cleanStart = startDate.split('T')[0];
+  const cleanEnd = endDate.split('T')[0];
+  const [startYear, startMonth] = cleanStart.split('-').map(Number);
+  const [endYear, endMonth] = cleanEnd.split('-').map(Number);
+
+  if (!startYear || !startMonth || !endYear || !endMonth) {
+    return [cleanStart.substring(0, 7) || cleanEnd.substring(0, 7)];
+  }
+
+  const months: string[] = [];
+  let currentYear = startYear;
+  let currentMonth = startMonth;
+
+  while (
+    currentYear < endYear ||
+    (currentYear === endYear && currentMonth <= endMonth)
+  ) {
+    months.push(`${currentYear}-${String(currentMonth).padStart(2, '0')}`);
+    currentMonth += 1;
+    if (currentMonth > 12) {
+      currentMonth = 1;
+      currentYear += 1;
+    }
+  }
+
+  return months.length > 0 ? months : [cleanStart.substring(0, 7)];
+}
+
+/**
+ * Filtra e deduplica lançamentos para a competência ou intervalo de datas selecionado.
  * Para séries recorrentes que possuem múltiplos registros legados ou instâncias físicas no banco,
- * prioriza o registro específico da competência ou mantém apenas 1 projeção modelo por série.
+ * garante que apareça EXATAMENTE 1 ocorrência por série em cada mês do período filtrado.
  */
 export function getExpensesForCompetence<T extends {
   id: string;
@@ -319,77 +351,105 @@ export function getExpensesForCompetence<T extends {
   startDate?: string,
   endDate?: string
 ): T[] {
-  const eligible = expenses.filter((item) => {
-    let relevantInstallment = undefined;
-    if (item.lancamentosBase && item.lancamentosBase.length > 0) {
-      if (startDate || endDate) {
-        relevantInstallment = item.lancamentosBase.find((lb) => {
-          const d = lb.dataVencimentoParcela ? lb.dataVencimentoParcela.split('T')[0] : '';
-          return (!startDate || d >= startDate) && (!endDate || d <= endDate);
-        });
-      } else {
-        relevantInstallment = item.lancamentosBase.find(
-          (lb) =>
-            (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
-            (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia)) ||
-            (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(selectedCompetencia))
-        );
-      }
-    }
-
-    const isRecorrente = item.origemLancamento === 'recorrente';
-    const recurringStartMonth = (item.dataInicioRecorrencia || item.competencia || item.dataVencimento || '').substring(0, 7);
-    const recurringEndMonth = item.dataFimRecorrencia ? item.dataFimRecorrencia.substring(0, 7) : null;
-    const isRecurringActiveInCompetence =
-      isRecorrente &&
-      (!recurringStartMonth || selectedCompetencia >= recurringStartMonth) &&
-      (!recurringEndMonth || selectedCompetencia <= recurringEndMonth);
-
-    if (startDate || endDate) {
-      const itemDueDate = getEffectiveExpenseDueDate(item, selectedCompetencia);
-      if (startDate && (!itemDueDate || itemDueDate < startDate)) return false;
-      if (endDate && (!itemDueDate || itemDueDate > endDate)) return false;
-    } else {
-      const matchesCompetence =
-        (item.competencia && item.competencia.startsWith(selectedCompetencia)) ||
-        (item.dataVencimento && item.dataVencimento.startsWith(selectedCompetencia)) ||
-        !!relevantInstallment ||
-        isRecurringActiveInCompetence;
-      if (!matchesCompetence) return false;
-    }
-
-    return true;
-  });
-
-  // Deduplica séries recorrentes para que apareça apenas 1 registro por competência
-  const recurringMap = new Map<string, T>();
   const nonRecurring: T[] = [];
+  const recurringBySeries = new Map<string, T[]>();
 
-  for (const item of eligible) {
+  // 1. Separa lançamentos comuns e agrupa ocorrências da mesma série recorrente
+  for (const item of expenses) {
     if (item.origemLancamento !== 'recorrente') {
-      nonRecurring.push(item);
-      continue;
-    }
+      let matches = false;
 
-    const descClean = (item.descricao || '').trim().toLowerCase();
-    const seriesKey = item.recorrenciaPaiId || `rec_${descClean}_${item.categoriaId || ''}_${item.responsavelId || ''}`;
-    const itemMonth = (item.competencia || item.dataVencimento || '').substring(0, 7) || selectedCompetencia;
-    const mapKey = startDate || endDate ? `${seriesKey}_${itemMonth}` : seriesKey;
+      let relevantInstallment = undefined;
+      if (item.lancamentosBase && item.lancamentosBase.length > 0) {
+        if (startDate || endDate) {
+          relevantInstallment = item.lancamentosBase.find((lb) => {
+            const d = lb.dataVencimentoParcela ? lb.dataVencimentoParcela.split('T')[0] : '';
+            return (!startDate || d >= startDate) && (!endDate || d <= endDate);
+          });
+        } else {
+          relevantInstallment = item.lancamentosBase.find(
+            (lb) =>
+              (lb.competencia && lb.competencia.startsWith(selectedCompetencia)) ||
+              (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(selectedCompetencia)) ||
+              (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(selectedCompetencia))
+          );
+        }
+      }
 
-    const isExactMonth =
-      (item.competencia && item.competencia.startsWith(selectedCompetencia)) ||
-      (item.dataVencimento && item.dataVencimento.startsWith(selectedCompetencia));
+      if (startDate || endDate) {
+        const itemDueDate = getEffectiveExpenseDueDate(item, selectedCompetencia);
+        if ((!startDate || itemDueDate >= startDate) && (!endDate || itemDueDate <= endDate)) {
+          matches = true;
+        }
+      } else {
+        if (
+          (item.competencia && item.competencia.startsWith(selectedCompetencia)) ||
+          (item.dataVencimento && item.dataVencimento.startsWith(selectedCompetencia)) ||
+          !!relevantInstallment
+        ) {
+          matches = true;
+        }
+      }
 
-    const existing = recurringMap.get(mapKey);
-    if (!existing) {
-      recurringMap.set(mapKey, item);
-    } else if (isExactMonth) {
-      // Prioriza o registro físico cadastrado especificamente para este mês
-      recurringMap.set(mapKey, item);
+      if (matches) {
+        nonRecurring.push(item);
+      }
+    } else {
+      const descClean = (item.descricao || '').trim().toLowerCase();
+      const seriesKey = item.recorrenciaPaiId || `rec_${descClean}_${item.categoriaId || ''}_${item.responsavelId || ''}`;
+      const group = recurringBySeries.get(seriesKey) || [];
+      group.push(item);
+      recurringBySeries.set(seriesKey, group);
     }
   }
 
-  return [...nonRecurring, ...Array.from(recurringMap.values())];
+  // 2. Determina os meses-alvo da consulta
+  const targetMonths = (startDate && endDate)
+    ? getMonthsBetweenDates(startDate, endDate)
+    : [selectedCompetencia || (startDate ? startDate.substring(0, 7) : '2026-09')];
+
+  const recurringResult: T[] = [];
+
+  // 3. Para cada série recorrente, projeta no máximo 1 ocorrência por mês do período
+  for (const [, seriesItems] of recurringBySeries.entries()) {
+    const startMonth = (
+      seriesItems.find((i) => i.dataInicioRecorrencia)?.dataInicioRecorrencia ||
+      seriesItems[0]?.competencia ||
+      seriesItems[0]?.dataVencimento ||
+      ''
+    ).substring(0, 7);
+
+    const endMonth = seriesItems.find((i) => i.dataFimRecorrencia)?.dataFimRecorrencia?.substring(0, 7) || null;
+
+    for (const targetMonth of targetMonths) {
+      // Verifica se a série está ativa neste mês
+      const isActive = (!startMonth || targetMonth >= startMonth) && (!endMonth || targetMonth <= endMonth);
+      if (!isActive) continue;
+
+      // Busca o registro físico correspondente àquele mês específico (se houver)
+      const exactMonthItem = seriesItems.find(
+        (i) =>
+          (i.competencia && i.competencia.startsWith(targetMonth)) ||
+          (i.dataVencimento && i.dataVencimento.startsWith(targetMonth))
+      );
+
+      // Prioriza o registro cadastrado para este mês ou usa o item mais recente/modelo da série
+      const chosenItem = exactMonthItem || seriesItems[seriesItems.length - 1] || seriesItems[0];
+      if (!chosenItem) continue;
+
+      // Calcula a data de vencimento efetiva para este mês
+      const effectiveDueDate = getEffectiveExpenseDueDate(chosenItem, targetMonth);
+
+      // Se houver filtro de data (ex: quinzena ou personalizado), valida se a data no mês cai no intervalo
+      if (startDate && effectiveDueDate < startDate) continue;
+      if (endDate && effectiveDueDate > endDate) continue;
+
+      // Emite exatamente 1 ocorrência para este mês
+      recurringResult.push(chosenItem);
+    }
+  }
+
+  return [...nonRecurring, ...recurringResult];
 }
 
 /**

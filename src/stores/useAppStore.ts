@@ -651,6 +651,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (updates.status !== undefined) payload.status = updates.status;
       if (updates.origemLancamento !== undefined) payload.origemLancamento = updates.origemLancamento;
       if (updates.numeroParcelas !== undefined) payload.numeroParcelas = updates.numeroParcelas;
+      if (updates.dataInicioRecorrencia !== undefined) {
+        payload.dataInicioRecorrencia = updates.dataInicioRecorrencia ? new Date(updates.dataInicioRecorrencia).toISOString() : null;
+      }
+      if (updates.dataFimRecorrencia !== undefined) {
+        payload.dataFimRecorrencia = updates.dataFimRecorrencia ? new Date(updates.dataFimRecorrencia).toISOString() : null;
+      }
+      if (updates.recorrenciaPaiId !== undefined) {
+        payload.recorrenciaPaiId = updates.recorrenciaPaiId || null;
+      }
       if (updates.naoCompartilhar !== undefined) payload.naoCompartilhar = updates.naoCompartilhar;
       if (updates.valor !== undefined) payload.valor = Number(updates.valor);
       if (updates.competencia !== undefined) payload.competencia = updates.competencia ? new Date(updates.competencia).toISOString() : null;
@@ -663,9 +672,73 @@ export const useAppStore = create<AppState>((set, get) => ({
       await api.updateExpense(token, id, payload);
       await get().loadApiData(token);
     } else {
-      set((state) => ({
-        expenses: state.expenses.map((e) => (e.id === id ? { ...e, ...updates, updatedAt: new Date().toISOString() } : e)),
-      }));
+      set((state) => {
+        const existing = state.expenses.find((e) => e.id === id);
+        if (!existing) return state;
+
+        const updatedExpense: Gasto = {
+          ...existing,
+          ...updates,
+          updatedAt: new Date().toISOString(),
+        };
+
+        const targetOrigem = updates.origemLancamento || existing.origemLancamento;
+
+        if (targetOrigem === 'parcelado') {
+          const numParcelas = updates.numeroParcelas || existing.numeroParcelas || 2;
+          const baseDate = new Date((updates.dataVencimento || existing.dataVencimento || new Date().toISOString().split('T')[0]) + 'T00:00:00');
+          const totalVal = Number(updates.valor ?? existing.valor);
+          const valParcela = totalVal / numParcelas;
+
+          updatedExpense.origemLancamento = 'parcelado';
+          updatedExpense.numeroParcelas = numParcelas;
+          updatedExpense.recorrenciaPaiId = undefined;
+          updatedExpense.dataInicioRecorrencia = undefined;
+          updatedExpense.dataFimRecorrencia = undefined;
+          updatedExpense.lancamentosBase = Array.from({ length: numParcelas }, (_, index) => {
+            const num = index + 1;
+            const dueDate = new Date(baseDate);
+            dueDate.setMonth(baseDate.getMonth() + index);
+            const dueStr = dueDate.toISOString().split('T')[0];
+            const compStr = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-01`;
+
+            return {
+              id: `lb-${id}-${num}`,
+              gastoId: id,
+              descricao: `${updatedExpense.descricao} - parcela ${num}/${numParcelas}`,
+              valorParcela: valParcela,
+              numeroParcela: num,
+              dataVencimentoParcela: dueStr,
+              status: (updatedExpense.status || 'pendente') as StatusGasto,
+              competencia: compStr,
+            };
+          });
+        } else if (targetOrigem === 'unico') {
+          updatedExpense.origemLancamento = 'unico';
+          updatedExpense.numeroParcelas = 1;
+          updatedExpense.lancamentosBase = undefined;
+          updatedExpense.recorrenciaPaiId = undefined;
+          updatedExpense.dataInicioRecorrencia = undefined;
+          updatedExpense.dataFimRecorrencia = undefined;
+        } else if (targetOrigem === 'recorrente') {
+          updatedExpense.origemLancamento = 'recorrente';
+          updatedExpense.numeroParcelas = 1;
+          updatedExpense.lancamentosBase = undefined;
+          updatedExpense.recorrenciaPaiId = undefined;
+          updatedExpense.dataInicioRecorrencia = updates.dataVencimento || existing.dataVencimento || new Date().toISOString().split('T')[0];
+        }
+
+        // Clean up any child recurring items if parent was transformed
+        const filteredExpenses = state.expenses.filter((e) => {
+          if (e.id === id) return false;
+          if (targetOrigem !== 'recorrente' && e.recorrenciaPaiId === id) return false;
+          return true;
+        });
+
+        return {
+          expenses: [updatedExpense, ...filteredExpenses],
+        };
+      });
     }
   },
 
