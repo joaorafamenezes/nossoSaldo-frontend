@@ -244,5 +244,52 @@ describe('Gastos Recorrentes Contínuos Sem Data Final (Projeção e Materializa
     expect(screen.getByText('1 registros')).toBeInTheDocument();
     expect(screen.getByText('1 categorias')).toBeInTheDocument();
   });
+
+  it('deduplica registros recorrentes corretamente ao filtrar por 2ª Quinzena e 1ª Quinzena', () => {
+    // 12 registros de "Loovi Seguros" com vencimento todo dia 20
+    const looviRows: Gasto[] = Array.from({ length: 12 }, (_, i) => {
+      const monthStr = String(i + 1).padStart(2, '0');
+      return {
+        id: `gst-loovi-${i + 1}`,
+        descricao: 'Loovi Seguros',
+        tipo: 'despesa',
+        status: 'pendente',
+        origemLancamento: 'recorrente',
+        numeroParcelas: 1,
+        naoCompartilhar: false,
+        valor: 180,
+        competencia: `2026-${monthStr}-01`,
+        dataVencimento: `2026-${monthStr}-20`,
+        dataInicioRecorrencia: '2026-01-20',
+        recorrenciaPaiId: 'gst-loovi-1',
+        categoriaId: 'cat-moradia',
+        responsavelId: 'usr-1',
+        createdAt: '2026-01-01T10:00:00.000Z',
+        updatedAt: '2026-01-01T10:00:00.000Z',
+      };
+    });
+
+    storeState.expenses = looviRows;
+    storeState.selectedCompetencia = '2026-09';
+
+    const { rerender } = render(<ExpensesPage />);
+
+    // Por padrão (Mês completo): 1 registro
+    expect(screen.getAllByText('Loovi Seguros')).toHaveLength(1);
+
+    // Clica em "2ª Quinzena (15 a 30)" -> dia 20 cai na 2ª quinzena -> exatamente 1 registro
+    const secondHalfBtn = screen.getByRole('button', { name: /2ª Quinzena/i });
+    fireEvent.click(secondHalfBtn);
+
+    expect(screen.getAllByText('Loovi Seguros')).toHaveLength(1);
+    expect(screen.getByText('1 registros')).toBeInTheDocument();
+
+    // Clica em "1ª Quinzena (01 a 14)" -> dia 20 não cai na 1ª quinzena -> 0 registros
+    const firstHalfBtn = screen.getByRole('button', { name: /1ª Quinzena/i });
+    fireEvent.click(firstHalfBtn);
+
+    expect(screen.queryByText('Loovi Seguros')).not.toBeInTheDocument();
+    expect(screen.getByText('Nenhum lançamento encontrado para os filtros selecionados.')).toBeInTheDocument();
+  });
 });
 

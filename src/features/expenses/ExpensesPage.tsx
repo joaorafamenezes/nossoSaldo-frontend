@@ -95,8 +95,8 @@ export function ExpensesPage() {
       const { effectiveStatus, effectiveDueDate } = getEffectiveExpenseStatus(
         item,
         selectedCompetencia,
-        startDate,
-        endDate
+        effectiveStartDate,
+        effectiveEndDate
       );
 
       if (selectedStatus === 'pago' && effectiveStatus !== 'pago') return false;
@@ -128,7 +128,7 @@ export function ExpensesPage() {
 
       return true;
     });
-  }, [expenses, jointInfo, selectedCompetencia, startDate, endDate, searchQuery, selectedType, selectedStatus, selectedCategoryId, selectedResponsavelId, selectedCardId]);
+  }, [expenses, jointInfo, selectedCompetencia, effectiveStartDate, effectiveEndDate, searchQuery, selectedType, selectedStatus, selectedCategoryId, selectedResponsavelId, selectedCardId]);
 
   const handleToggleSelect = (id: string) => {
     setSelectedIds((prev) =>
