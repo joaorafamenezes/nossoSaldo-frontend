@@ -30,6 +30,8 @@ export interface LancamentoBase {
   faturaCartaoStatus?: string;
 }
 
+export type EscopoEdicaoRecorrencia = 'THIS_ONLY' | 'THIS_AND_FUTURE' | 'ALL_SERIES';
+
 export interface Gasto {
   id: string;
   descricao: string;
@@ -55,6 +57,8 @@ export interface Gasto {
   recorrenciaPaiId?: string;
   dataInicioRecorrencia?: string;
   dataFimRecorrencia?: string;
+  escopoEdicao?: EscopoEdicaoRecorrencia;
+  targetCompetencia?: string;
   lancamentosBase?: LancamentoBase[];
   createdAt: string;
   updatedAt: string;
