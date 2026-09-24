@@ -137,9 +137,25 @@ export function ExpenseGrid({
                 </div>
 
                 <button
+                  type="button"
                   onClick={() => {
-                    setStatusInstallmentToConfirm(null);
-                    setStatusExpenseToConfirm(expense);
+                    const currentMonthInst = isParcelado && expense.lancamentosBase
+                      ? expense.lancamentosBase.find((lb: any) => {
+                          const comp = selectedCompetencia || new Date().toISOString().substring(0, 7);
+                          return (
+                            (lb.competencia && lb.competencia.startsWith(comp)) ||
+                            (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(comp)) ||
+                            (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(comp))
+                          );
+                        })
+                      : null;
+                    if (isParcelado && currentMonthInst) {
+                      setStatusExpenseToConfirm(expense);
+                      setStatusInstallmentToConfirm(currentMonthInst);
+                    } else {
+                      setStatusInstallmentToConfirm(null);
+                      setStatusExpenseToConfirm(expense);
+                    }
                   }}
                   className="cursor-pointer hover:opacity-80 transition-opacity"
                   title="Clique para alternar o status"

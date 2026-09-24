@@ -220,6 +220,61 @@ describe('Gestão de Gastos Parcelados & Critérios 001 e 002', () => {
       expect(screen.queryByText('Parcela 2/3')).not.toBeInTheDocument();
     });
 
+    it('CT001: ao clicar no botão PAGAR do card PAI, paga a parcela do mês vigente sem precisar abrir os registros filhos', () => {
+      render(
+        <ExpenseCategoryAccordion
+          expenses={[mockParceladoExpensePendingInSeptember]}
+          selectedIds={[]}
+          onToggleSelect={vi.fn()}
+        />
+      );
+
+      // Do NOT expand installments! Click the parent card's Pagar button directly
+      const parentPayBtn = screen.getByRole('button', { name: /^Pagar$/i });
+      fireEvent.click(parentPayBtn);
+
+      // Verify that the child installment confirmation modal is shown directly
+      expect(screen.getByText(/Confirmar Pagamento da Parcela/i)).toBeInTheDocument();
+      expect(screen.getByText(/Registrar quitação da Parcela 1/i)).toBeInTheDocument();
+
+      // Confirm payment in modal
+      const modalConfirmBtn = screen.getByRole('button', { name: /Sim, Confirmar Pagamento/i });
+      fireEvent.click(modalConfirmBtn);
+
+      // Expect toggleInstallmentStatus called for the month's child installment
+      expect(mockToggleInstallmentStatus).toHaveBeenCalledWith(
+        mockParceladoExpensePendingInSeptember.id,
+        mockPendingInstallments[0].id
+      );
+    });
+
+    it('ao clicar no botão Reabrir do card PAI quando a parcela vigente estiver paga, abre confirmação da parcela para reabertura', () => {
+      render(
+        <ExpenseCategoryAccordion
+          expenses={[mockParceladoExpensePaidInSeptember]}
+          selectedIds={[]}
+          onToggleSelect={vi.fn()}
+        />
+      );
+
+      // Click parent card's Reabrir button
+      const parentReopenBtn = screen.getByRole('button', { name: /^Reabrir$/i });
+      fireEvent.click(parentReopenBtn);
+
+      // Verify confirmation modal is shown for the paid installment
+      expect(screen.getByText(/Confirmar Reabertura da Parcela/i)).toBeInTheDocument();
+      expect(screen.getByText(/Alterar status para Pendente/i)).toBeInTheDocument();
+
+      // Confirm reopening in modal
+      const modalConfirmBtn = screen.getByRole('button', { name: /Sim, Reabrir/i });
+      fireEvent.click(modalConfirmBtn);
+
+      expect(mockToggleInstallmentStatus).toHaveBeenCalledWith(
+        mockParceladoExpensePaidInSeptember.id,
+        mockInstallments[0].id
+      );
+    });
+
     it('abre modal de confirmação ao clicar em Pagar parcela no ExpenseCategoryAccordion e confirma', () => {
       render(
         <ExpenseCategoryAccordion
@@ -523,48 +578,54 @@ describe('Gestão de Gastos Parcelados & Critérios 001 e 002', () => {
     });
 
     it('exibe Pendente quando a parcela da competência atual vence no futuro, mesmo se a data inicial do contrato for anterior', () => {
-      // Parcela de setembro vence em 20/09 (no futuro relativo a 05/09).
-      const mockGastoFuturo: Gasto = {
-        id: 'gst-futuro',
-        descricao: 'Financiamento Automotivo',
-        tipo: 'despesa',
-        status: 'pendente',
-        origemLancamento: 'parcelado',
-        numeroParcelas: 12,
-        parcelaAtual: 1,
-        naoCompartilhar: false,
-        valor: 12000,
-        competencia: '2026-09-01',
-        dataVencimento: '2026-09-20',
-        categoriaId: 'cat-lazer',
-        responsavelId: 'usr-1',
-        createdAt: '2026-08-01T08:00:00Z',
-        updatedAt: '2026-08-01T08:00:00Z',
-        lancamentosBase: [
-          {
-            id: 'lb-auto-1',
-            gastoId: 'gst-futuro',
-            descricao: 'Financiamento Automotivo (1/12)',
-            valorParcela: 1000,
-            numeroParcela: 1,
-            dataVencimentoParcela: '2026-09-20',
-            status: 'pendente',
-            competencia: '2026-09-01',
-          },
-        ],
-      };
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-05T12:00:00Z'));
+      try {
+        // Parcela de setembro vence em 20/09 (no futuro relativo a 05/09).
+        const mockGastoFuturo: Gasto = {
+          id: 'gst-futuro',
+          descricao: 'Financiamento Automotivo',
+          tipo: 'despesa',
+          status: 'pendente',
+          origemLancamento: 'parcelado',
+          numeroParcelas: 12,
+          parcelaAtual: 1,
+          naoCompartilhar: false,
+          valor: 12000,
+          competencia: '2026-09-01',
+          dataVencimento: '2026-09-20',
+          categoriaId: 'cat-lazer',
+          responsavelId: 'usr-1',
+          createdAt: '2026-08-01T08:00:00Z',
+          updatedAt: '2026-08-01T08:00:00Z',
+          lancamentosBase: [
+            {
+              id: 'lb-auto-1',
+              gastoId: 'gst-futuro',
+              descricao: 'Financiamento Automotivo (1/12)',
+              valorParcela: 1000,
+              numeroParcela: 1,
+              dataVencimentoParcela: '2026-09-20',
+              status: 'pendente',
+              competencia: '2026-09-01',
+            },
+          ],
+        };
 
-      render(
-        <ExpenseCategoryAccordion
-          expenses={[mockGastoFuturo]}
-          selectedIds={[]}
-          onToggleSelect={vi.fn()}
-        />
-      );
+        render(
+          <ExpenseCategoryAccordion
+            expenses={[mockGastoFuturo]}
+            selectedIds={[]}
+            onToggleSelect={vi.fn()}
+          />
+        );
 
-      expect(screen.getByText('Pendente')).toBeInTheDocument();
-      expect(screen.queryByText('Atrasado')).not.toBeInTheDocument();
-      expect(screen.getByText(/STATUS: PENDENTE/i)).toBeInTheDocument();
+        expect(screen.getByText('Pendente')).toBeInTheDocument();
+        expect(screen.queryByText('Atrasado')).not.toBeInTheDocument();
+        expect(screen.getByText(/STATUS: PENDENTE/i)).toBeInTheDocument();
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

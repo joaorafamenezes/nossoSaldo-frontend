@@ -333,6 +333,21 @@ export function ExpenseCategoryAccordion({
                     const effectiveVal = getEffectiveExpenseValue(expense, selectedCompetencia, startDate, endDate);
                     const { effectiveStatus, effectiveDueDate, isPaid, isOverdue, daysDiff } = getEffectiveExpenseStatus(expense, selectedCompetencia, startDate, endDate);
 
+                    const currentMonthInstallment = isParcelado && expense.lancamentosBase
+                      ? expense.lancamentosBase.find((lb: any) => {
+                          if (startDate || endDate) {
+                            const d = lb.dataVencimentoParcela ? lb.dataVencimentoParcela.split('T')[0] : '';
+                            return (!startDate || d >= startDate) && (!endDate || d <= endDate);
+                          }
+                          const comp = selectedCompetencia || new Date().toISOString().substring(0, 7);
+                          return (
+                            (lb.competencia && lb.competencia.startsWith(comp)) ||
+                            (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(comp)) ||
+                            (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(comp))
+                          );
+                        })
+                      : null;
+
                     return (
                       <div
                         key={expense.id}
@@ -517,16 +532,18 @@ export function ExpenseCategoryAccordion({
 
                             {/* Action Buttons */}
                             <div className="flex items-center gap-2">
-                              {/* If parcelado, monthly actions are performed via the child installments. Parent shows Pay all / Reopen all */}
+                              {/* If parcelado with current month installment, directly opens confirmation for that child installment */}
                               <Button
                                 size="sm"
                                 variant={isPaid ? 'secondary' : 'primary'}
                                 onClick={() => {
-                                  if (expense.origemLancamento === 'parcelado' && !expandedParcelas[expense.id]) {
-                                    toggleParcelas(expense.id);
+                                  if (isParcelado && currentMonthInstallment) {
+                                    setStatusExpenseToConfirm(expense);
+                                    setStatusInstallmentToConfirm(currentMonthInstallment);
+                                  } else {
+                                    setStatusInstallmentToConfirm(null);
+                                    setStatusExpenseToConfirm(expense);
                                   }
-                                  setStatusInstallmentToConfirm(null);
-                                  setStatusExpenseToConfirm(expense);
                                 }}
                                 className={`text-xs font-bold px-4 py-1.5 rounded-xl transition-all ${
                                   isPaid
