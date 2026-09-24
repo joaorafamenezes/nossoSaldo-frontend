@@ -870,6 +870,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       return;
     }
 
+    if (expense.origemLancamento === 'parcelado' || (expense.lancamentosBase && expense.lancamentosBase.length > 0)) {
+      const existingInstallment = expense.lancamentosBase?.find(
+        (lb) =>
+          (lb.competencia && lb.competencia.startsWith(comp)) ||
+          (lb.dataVencimentoParcela && lb.dataVencimentoParcela.startsWith(comp)) ||
+          (lb.faturaCartaoCompetencia && lb.faturaCartaoCompetencia.startsWith(comp))
+      );
+
+      if (existingInstallment) {
+        await get().toggleInstallmentStatus(id, existingInstallment.id);
+        return;
+      }
+    }
+
     const nextStatus: StatusGasto = expense.status === 'pago' ? 'pendente' : 'pago';
     const token = localStorage.getItem('@NossoSaldo:token');
     if (token) {
