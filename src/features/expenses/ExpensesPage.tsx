@@ -6,6 +6,7 @@ import { ExpenseTable } from './ExpenseTable';
 import { ExpenseGrid } from './ExpenseGrid';
 import { ExpenseDrawerForm } from './ExpenseDrawerForm';
 import { BatchActionsBar } from './BatchActionsBar';
+import { ExpenseDeleteModal } from './ExpenseDeleteModal';
 import { Button } from '../../components/ui/Button';
 import { PlusCircle, Receipt } from 'lucide-react';
 import { StatusGasto } from '../../types/financial';
@@ -144,18 +145,31 @@ export function ExpensesPage() {
     }
   };
 
+  const [isBatchDeleteModalOpen, setIsBatchDeleteModalOpen] = React.useState(false);
+  // Ocultado temporariamente conforme solicitado pelo usuário
+  const ENABLE_BATCH_ACTIONS = false;
+
+  const selectedExpensesList = React.useMemo(() => {
+    return filteredExpenses.filter((e) => selectedIds.includes(e.id));
+  }, [filteredExpenses, selectedIds]);
+
   const handleBatchStatus = async (status: StatusGasto) => {
     await batchToggleStatus(selectedIds, status);
     toast.success(`${selectedIds.length} itens marcados como ${status}!`);
     setSelectedIds([]);
   };
 
-  const handleBatchDelete = async () => {
-    if (confirm(`Deseja excluir ${selectedIds.length} lançamentos selecionados?`)) {
-      await batchDeleteExpenses(selectedIds);
-      toast.success(`${selectedIds.length} lançamentos excluídos.`);
-      setSelectedIds([]);
-    }
+  const handleBatchDelete = () => {
+    if (selectedIds.length === 0) return;
+    setIsBatchDeleteModalOpen(true);
+  };
+
+  const handleConfirmBatchDelete = async () => {
+    const count = selectedIds.length;
+    await batchDeleteExpenses(selectedIds);
+    toast.success(`${count} ${count === 1 ? 'lançamento excluído' : 'lançamentos excluídos'}.`);
+    setSelectedIds([]);
+    setIsBatchDeleteModalOpen(false);
   };
 
   return (
@@ -254,36 +268,49 @@ export function ExpensesPage() {
       {viewMode === 'category' ? (
         <ExpenseCategoryAccordion
           expenses={filteredExpenses}
-          selectedIds={selectedIds}
-          onToggleSelect={handleToggleSelect}
+          selectedIds={ENABLE_BATCH_ACTIONS ? selectedIds : undefined}
+          onToggleSelect={ENABLE_BATCH_ACTIONS ? handleToggleSelect : undefined}
           startDate={effectiveStartDate}
           endDate={effectiveEndDate}
         />
       ) : viewMode === 'table' ? (
         <ExpenseTable
           expenses={filteredExpenses}
-          selectedIds={selectedIds}
-          onToggleSelect={handleToggleSelect}
-          onSelectAll={handleSelectAll}
+          selectedIds={ENABLE_BATCH_ACTIONS ? selectedIds : undefined}
+          onToggleSelect={ENABLE_BATCH_ACTIONS ? handleToggleSelect : undefined}
+          onSelectAll={ENABLE_BATCH_ACTIONS ? handleSelectAll : undefined}
         />
       ) : (
         <ExpenseGrid
           expenses={filteredExpenses}
-          selectedIds={selectedIds}
-          onToggleSelect={handleToggleSelect}
+          selectedIds={ENABLE_BATCH_ACTIONS ? selectedIds : undefined}
+          onToggleSelect={ENABLE_BATCH_ACTIONS ? handleToggleSelect : undefined}
         />
       )}
 
-      {/* Floating Batch Actions Bar */}
-      <BatchActionsBar
-        selectedCount={selectedIds.length}
-        onClearSelection={() => setSelectedIds([])}
-        onBatchStatus={handleBatchStatus}
-        onBatchDelete={handleBatchDelete}
-      />
+      {/* Floating Batch Actions Bar (oculto por enquanto) */}
+      {ENABLE_BATCH_ACTIONS && (
+        <BatchActionsBar
+          selectedCount={selectedIds.length}
+          onClearSelection={() => setSelectedIds([])}
+          onBatchStatus={handleBatchStatus}
+          onBatchDelete={handleBatchDelete}
+        />
+      )}
 
       {/* Drawer Form Modal */}
       <ExpenseDrawerForm />
+
+      {/* Batch Delete Confirmation Modal (oculto por enquanto) */}
+      {ENABLE_BATCH_ACTIONS && (
+        <ExpenseDeleteModal
+          selectedExpenses={selectedExpensesList}
+          selectedCount={selectedIds.length}
+          isOpen={isBatchDeleteModalOpen}
+          onClose={() => setIsBatchDeleteModalOpen(false)}
+          onConfirm={handleConfirmBatchDelete}
+        />
+      )}
     </div>
   );
 }

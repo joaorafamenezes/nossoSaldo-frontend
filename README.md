@@ -43,6 +43,7 @@ Quando `VITE_API_URL` nao e informado, o frontend usa a configuracao padrao defi
 - O botao de redefinicao de senha fica disponivel no fluxo publico de recuperacao, nao no menu autenticado do dashboard.
 - Em lancamentos parcelados com parcela pendente no mes vigente, clicar em `Pagar` no card PAI abre diretamente a confirmacao e efetua o pagamento da parcela correspondente ao mes vigente, sem exigir a expansao da listagem de parcelas filhas.
 - Campo de Observações: No cadastro (`CT001`) e na edição (`CT002`) de lançamentos, é disponibilizado um campo `textarea` para detalhar especificidades do registro. O valor informado é persistido na base existente (`Gasto.observacao`) e exibido durante as consultas nas visualizações de acordeão por categoria, grade e tabela.
+- Confirmação de Exclusão de Lançamentos (`CT001`): Ao clicar no botão de exclusão de gastos e receitas, é exibido modal customizado de confirmação com mensagem explícita, detalhamento do registro e opções para confirmar a exclusão ou voltar atrás sem remover nada. Ao confirmar, o modal gerencia feedback de carregamento assíncrono (`Excluindo...`), desabilita cliques concorrentes e remove o registro de forma otimista da interface. Há suporte completo para exclusão de lançamentos únicos, parcelados e também recorrentes projetados virtualmente (`virtual-{recorrenciaId}-{mesKey}`). A funcionalidade de ações/seleção em massa (`ENABLE_BATCH_ACTIONS`) encontra-se temporariamente desabilitada/oculta da interface a pedido do usuário, com suporte preservado na arquitetura.
 
 ## Desenvolvimento local
 

@@ -798,13 +798,37 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   deleteExpense: async (id) => {
     const token = localStorage.getItem('@NossoSaldo:token');
+    set((state) => {
+      let filtered = state.expenses.filter((e) => e.id !== id);
+      if (id.startsWith('virtual-')) {
+        const recId = id.split('-').slice(1, 6).join('-');
+        filtered = filtered.filter((e) => {
+          if (e.id.startsWith(`virtual-${recId}`)) return false;
+          if ((e as any).recorrenciaId === recId || (e as any).recorrenciaPaiId === recId) return false;
+          return true;
+        });
+      } else {
+        const target = state.expenses.find((e) => e.id === id);
+        const recId = (target as any)?.recorrenciaId || (target as any)?.recorrenciaPaiId;
+        if (target?.origemLancamento === 'recorrente' && recId) {
+          filtered = filtered.filter((e) => {
+            if (e.id.startsWith(`virtual-${recId}`)) return false;
+            if ((e as any).recorrenciaId === recId || (e as any).recorrenciaPaiId === recId) return false;
+            return true;
+          });
+        }
+      }
+      return { expenses: filtered };
+    });
+
     if (token) {
-      await api.deleteExpense(token, id);
-      await get().loadApiData(token);
-    } else {
-      set((state) => ({
-        expenses: state.expenses.filter((e) => e.id !== id),
-      }));
+      try {
+        await api.deleteExpense(token, id);
+        await get().loadApiData(token);
+      } catch (err) {
+        await get().loadApiData(token);
+        throw err;
+      }
     }
   },
 

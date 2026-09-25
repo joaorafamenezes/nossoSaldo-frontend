@@ -3,6 +3,7 @@ import { Gasto, StatusGasto } from '../../types/financial';
 import { useAppStore } from '../../stores/useAppStore';
 import { CategoryBadge } from '../../components/common/CategoryBadge';
 import { ExpenseStatusModal } from './ExpenseStatusModal';
+import { ExpenseDeleteModal } from './ExpenseDeleteModal';
 import { MoneyDisplay } from '../../components/common/MoneyDisplay';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -27,21 +28,34 @@ import { toast } from 'sonner';
 
 interface ExpenseTableProps {
   expenses: Gasto[];
-  selectedIds: string[];
-  onToggleSelect: (id: string) => void;
-  onSelectAll: () => void;
+  selectedIds?: string[];
+  onToggleSelect?: (id: string) => void;
+  onSelectAll?: () => void;
 }
 
 export function ExpenseTable({
   expenses,
-  selectedIds,
+  selectedIds = [],
   onToggleSelect,
   onSelectAll,
 }: ExpenseTableProps) {
   const { categories, selectedCompetencia, toggleExpenseStatus, toggleInstallmentStatus, openEditExpense, deleteExpense } = useAppStore();
   const [statusExpenseToConfirm, setStatusExpenseToConfirm] = React.useState<Gasto | null>(null);
   const [statusInstallmentToConfirm, setStatusInstallmentToConfirm] = React.useState<any | null>(null);
+  const [expenseToDelete, setExpenseToDelete] = React.useState<Gasto | null>(null);
   const [expandedParcelas, setExpandedParcelas] = React.useState<Record<string, boolean>>({});
+
+  const handleConfirmDelete = async (expense?: Gasto) => {
+    const target = expense || expenseToDelete;
+    if (!target) return;
+    try {
+      await deleteExpense(target.id);
+      toast.success(`Lançamento "${target.descricao}" excluído com sucesso!`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao excluir lançamento.');
+      throw err;
+    }
+  };
 
   const toggleParcelas = (id: string) => {
     setExpandedParcelas((prev) => ({
@@ -89,14 +103,16 @@ export function ExpenseTable({
         <table className="w-full text-left text-xs text-zinc-300">
           <thead className="border-b border-zinc-800 bg-zinc-950/80 text-[11px] uppercase tracking-wider text-zinc-400 font-mono">
             <tr>
-              <th className="p-4 w-10">
-                <input
-                  type="checkbox"
-                  checked={isAllSelected}
-                  onChange={onSelectAll}
-                  className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500"
-                />
-              </th>
+              {onSelectAll && (
+                <th className="p-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={onSelectAll}
+                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500"
+                  />
+                </th>
+              )}
               <th className="p-4">Descrição</th>
               <th className="p-4">Categoria</th>
               <th className="p-4">Vencimento</th>
@@ -109,7 +125,7 @@ export function ExpenseTable({
           <tbody className="divide-y divide-zinc-800/60">
             {expenses.length === 0 ? (
               <tr>
-                <td colSpan={8} className="p-8 text-center text-zinc-400 text-xs">
+                <td colSpan={onSelectAll ? 8 : 7} className="p-8 text-center text-zinc-400 text-xs">
                   Nenhum lançamento encontrado para os filtros selecionados.
                 </td>
               </tr>
@@ -129,14 +145,16 @@ export function ExpenseTable({
                       } ${isExpanded ? 'bg-zinc-800/30' : ''}`}
                     >
                       {/* Checkbox */}
-                      <td className="p-4">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => onToggleSelect(expense.id)}
-                          className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500"
-                        />
-                      </td>
+                      {onToggleSelect && (
+                        <td className="p-4">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => onToggleSelect(expense.id)}
+                            className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500"
+                          />
+                        </td>
+                      )}
 
                       {/* Description */}
                       <td className="p-4 font-semibold text-zinc-100">
@@ -303,7 +321,7 @@ export function ExpenseTable({
                             <Edit3 className="h-3.5 w-3.5" />
                           </button>
                           <button
-                            onClick={() => deleteExpense(expense.id)}
+                            onClick={() => setExpenseToDelete(expense)}
                             className="rounded-lg p-1 text-zinc-400 hover:bg-rose-950/40 hover:text-rose-400"
                             title="Excluir"
                           >
@@ -316,7 +334,7 @@ export function ExpenseTable({
                     {/* Expandable Child Installments Sub-Row */}
                     {isParcelado && isExpanded && (
                       <tr className="bg-zinc-950/90 border-b border-zinc-800">
-                        <td colSpan={8} className="p-4 pl-12 bg-indigo-950/10">
+                        <td colSpan={onSelectAll ? 8 : 7} className="p-4 pl-12 bg-indigo-950/10">
                           <div className="space-y-3 animate-in fade-in duration-150">
                             <div className="flex items-center justify-between">
                               <span className="text-xs font-bold text-indigo-400 flex items-center gap-2">
@@ -440,6 +458,13 @@ export function ExpenseTable({
           handleConfirmStatus(exp);
         }
       }}
+    />
+
+    <ExpenseDeleteModal
+      expense={expenseToDelete}
+      isOpen={!!expenseToDelete}
+      onClose={() => setExpenseToDelete(null)}
+      onConfirm={handleConfirmDelete}
     />
   </>
 );
