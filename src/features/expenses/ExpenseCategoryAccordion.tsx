@@ -27,6 +27,7 @@ import {
   Calendar,
   Clock,
   RotateCcw,
+  FileText,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { toast } from 'sonner';
@@ -499,6 +500,17 @@ export function ExpenseCategoryAccordion({
                                 </span>
                               )}
                             </div>
+
+                            {/* Observação / Detalhes */}
+                            {expense.observacao && (
+                              <div className="mt-2 text-xs text-slate-600 dark:text-zinc-400 bg-slate-50 dark:bg-zinc-950/60 rounded-xl px-3 py-2 border border-slate-200 dark:border-zinc-800/80 flex items-start gap-2">
+                                <FileText className="h-3.5 w-3.5 mt-0.5 text-slate-400 dark:text-zinc-500 shrink-0" />
+                                <p className="whitespace-pre-wrap leading-relaxed">
+                                  <strong className="font-semibold text-slate-700 dark:text-zinc-300 mr-1">Obs:</strong>
+                                  {expense.observacao}
+                                </p>
+                              </div>
+                            )}
                           </div>
 
                           {/* Right Column: Amount, Status Label, Action Button, Edit/Delete */}

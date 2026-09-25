@@ -40,6 +40,7 @@ export function ExpenseDrawerForm() {
   const [cartaoCreditoId, setCartaoCreditoId] = React.useState('');
   const [naoCompartilhar, setNaoCompartilhar] = React.useState(false);
   const [status, setStatus] = React.useState<StatusGasto>('pendente');
+  const [observacao, setObservacao] = React.useState('');
 
   React.useEffect(() => {
     if (editingExpense) {
@@ -53,6 +54,7 @@ export function ExpenseDrawerForm() {
       setCartaoCreditoId(editingExpense.cartaoCreditoId || '');
       setNaoCompartilhar(editingExpense.naoCompartilhar);
       setStatus(editingExpense.status);
+      setObservacao(editingExpense.observacao || '');
     } else {
       const today = new Date().toISOString().split('T')[0];
       setDescricao('');
@@ -65,6 +67,7 @@ export function ExpenseDrawerForm() {
       setCartaoCreditoId('');
       setNaoCompartilhar(false);
       setStatus('pendente');
+      setObservacao('');
     }
   }, [editingExpense, isExpenseDrawerOpen, categories]);
 
@@ -151,6 +154,7 @@ export function ExpenseDrawerForm() {
       cartaoNome: matchedCard?.descricao,
       dataInicioRecorrencia: origemLancamento === 'recorrente' ? dueDate : undefined,
       dataFimRecorrencia: undefined,
+      observacao: observacao.trim() ? observacao.trim() : (editingExpense ? '' : undefined),
     };
 
     // Se estiver editando uma recorrência e mantendo ela como recorrente, abre o modal de escopo
@@ -454,6 +458,22 @@ export function ExpenseDrawerForm() {
                   </p>
                 </div>
               )}
+            </div>
+
+            {/* Observações */}
+            <div className="space-y-1.5">
+              <label htmlFor="observacao" className="text-xs font-medium text-zinc-300 block">
+                Observações
+              </label>
+              <textarea
+                id="observacao"
+                name="observacao"
+                rows={3}
+                placeholder="Detalhes ou especificidades deste lançamento (opcional)..."
+                value={observacao}
+                onChange={(e) => setObservacao(e.target.value)}
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-xs text-zinc-100 placeholder-zinc-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500 transition-colors resize-none"
+              />
             </div>
 
             {/* Private vs Joint Account */}

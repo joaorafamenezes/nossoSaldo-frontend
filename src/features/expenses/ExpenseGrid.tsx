@@ -17,6 +17,7 @@ import {
   Lock,
   ChevronDown,
   RotateCcw,
+  FileText,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { toast } from 'sonner';
@@ -207,6 +208,17 @@ export function ExpenseGrid({
                     </span>
                   )}
                 </div>
+
+                {/* Observação */}
+                {expense.observacao && (
+                  <div className="text-xs text-zinc-400 bg-zinc-950/60 rounded-xl p-2.5 border border-zinc-800/80 flex items-start gap-2 mt-2">
+                    <FileText className="h-3.5 w-3.5 mt-0.5 text-zinc-500 shrink-0" />
+                    <p className="line-clamp-2 leading-relaxed text-[11px]">
+                      <strong className="font-semibold text-zinc-300 mr-1">Obs:</strong>
+                      {expense.observacao}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* Expandable Child Installments List */}
