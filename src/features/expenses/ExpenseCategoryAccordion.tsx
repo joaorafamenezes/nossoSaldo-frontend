@@ -4,6 +4,7 @@ import { useAppStore } from '../../stores/useAppStore';
 import { MoneyDisplay } from '../../components/common/MoneyDisplay';
 import { CategoryBadge } from '../../components/common/CategoryBadge';
 import { ExpenseStatusModal } from './ExpenseStatusModal';
+import { ExpenseDeleteModal } from './ExpenseDeleteModal';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import {
@@ -34,15 +35,15 @@ import { toast } from 'sonner';
 
 interface ExpenseCategoryAccordionProps {
   expenses: Gasto[];
-  selectedIds: string[];
-  onToggleSelect: (id: string) => void;
+  selectedIds?: string[];
+  onToggleSelect?: (id: string) => void;
   startDate?: string;
   endDate?: string;
 }
 
 export function ExpenseCategoryAccordion({
   expenses,
-  selectedIds,
+  selectedIds = [],
   onToggleSelect,
   startDate,
   endDate,
@@ -115,6 +116,19 @@ export function ExpenseCategoryAccordion({
 
   const [statusExpenseToConfirm, setStatusExpenseToConfirm] = React.useState<Gasto | null>(null);
   const [statusInstallmentToConfirm, setStatusInstallmentToConfirm] = React.useState<any | null>(null);
+  const [expenseToDelete, setExpenseToDelete] = React.useState<Gasto | null>(null);
+
+  const handleConfirmDelete = async (expense?: Gasto) => {
+    const target = expense || expenseToDelete;
+    if (!target) return;
+    try {
+      await deleteExpense(target.id);
+      toast.success(`Lançamento "${target.descricao}" excluído com sucesso!`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao excluir lançamento.');
+      throw err;
+    }
+  };
 
   const handleConfirmStatus = (expense: Gasto) => {
     const { isPaid } = getEffectiveExpenseStatus(expense, selectedCompetencia);
@@ -363,12 +377,14 @@ export function ExpenseCategoryAccordion({
                           <div className="space-y-3 flex-1 min-w-0">
                             {/* Top Badges */}
                             <div className="flex items-center gap-2 flex-wrap">
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={() => onToggleSelect(expense.id)}
-                                className="h-4 w-4 rounded border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-emerald-600 focus:ring-emerald-500 mr-1 shrink-0"
-                              />
+                              {onToggleSelect && (
+                                <input
+                                  type="checkbox"
+                                  checked={isSelected}
+                                  onChange={() => onToggleSelect(expense.id)}
+                                  className="h-4 w-4 rounded border-slate-300 dark:border-zinc-700 bg-white dark:bg-zinc-950 text-emerald-600 focus:ring-emerald-500 mr-1 shrink-0"
+                                />
+                              )}
 
                               <Badge
                                 variant={expense.tipo === 'receita' ? 'success' : 'danger'}
@@ -586,7 +602,7 @@ export function ExpenseCategoryAccordion({
                               </button>
 
                               <button
-                                onClick={() => deleteExpense(expense.id)}
+                                onClick={() => setExpenseToDelete(expense)}
                                 className="rounded-xl border border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-2 text-slate-500 dark:text-zinc-400 hover:border-rose-300 dark:hover:border-rose-500/40 hover:text-rose-600 dark:hover:text-rose-400 transition-colors shadow-xs"
                                 title="Excluir Lançamento"
                               >
@@ -729,6 +745,14 @@ export function ExpenseCategoryAccordion({
             handleConfirmStatus(exp);
           }
         }}
+      />
+
+      {/* Confirmation Modal for Deletion */}
+      <ExpenseDeleteModal
+        expense={expenseToDelete}
+        isOpen={!!expenseToDelete}
+        onClose={() => setExpenseToDelete(null)}
+        onConfirm={handleConfirmDelete}
       />
     </div>
   );

@@ -3,6 +3,7 @@ import { Gasto } from '../../types/financial';
 import { useAppStore } from '../../stores/useAppStore';
 import { CategoryBadge } from '../../components/common/CategoryBadge';
 import { ExpenseStatusModal } from './ExpenseStatusModal';
+import { ExpenseDeleteModal } from './ExpenseDeleteModal';
 import { MoneyDisplay } from '../../components/common/MoneyDisplay';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
@@ -24,19 +25,32 @@ import { toast } from 'sonner';
 
 interface ExpenseGridProps {
   expenses: Gasto[];
-  selectedIds: string[];
-  onToggleSelect: (id: string) => void;
+  selectedIds?: string[];
+  onToggleSelect?: (id: string) => void;
 }
 
 export function ExpenseGrid({
   expenses,
-  selectedIds,
+  selectedIds = [],
   onToggleSelect,
 }: ExpenseGridProps) {
   const { categories, selectedCompetencia, toggleExpenseStatus, toggleInstallmentStatus, openEditExpense, deleteExpense } = useAppStore();
   const [statusExpenseToConfirm, setStatusExpenseToConfirm] = React.useState<Gasto | null>(null);
   const [statusInstallmentToConfirm, setStatusInstallmentToConfirm] = React.useState<any | null>(null);
+  const [expenseToDelete, setExpenseToDelete] = React.useState<Gasto | null>(null);
   const [expandedParcelas, setExpandedParcelas] = React.useState<Record<string, boolean>>({});
+
+  const handleConfirmDelete = async (expense?: Gasto) => {
+    const target = expense || expenseToDelete;
+    if (!target) return;
+    try {
+      await deleteExpense(target.id);
+      toast.success(`Lançamento "${target.descricao}" excluído com sucesso!`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao excluir lançamento.');
+      throw err;
+    }
+  };
 
   const toggleParcelas = (id: string) => {
     setExpandedParcelas((prev) => ({
@@ -105,12 +119,14 @@ export function ExpenseGrid({
               {/* Top header */}
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => onToggleSelect(expense.id)}
-                    className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500 shrink-0"
-                  />
+                  {onToggleSelect && (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => onToggleSelect(expense.id)}
+                      className="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-emerald-500 focus:ring-emerald-500 shrink-0"
+                    />
+                  )}
                   <CategoryBadge categoria={category} size="sm" />
 
                   {isParcelado && (
@@ -307,7 +323,7 @@ export function ExpenseGrid({
                     <Edit3 className="h-3.5 w-3.5" />
                   </button>
                   <button
-                    onClick={() => deleteExpense(expense.id)}
+                    onClick={() => setExpenseToDelete(expense)}
                     className="rounded-lg p-1 text-zinc-400 hover:bg-rose-950/40 hover:text-rose-400"
                     title="Excluir"
                   >
@@ -335,6 +351,13 @@ export function ExpenseGrid({
             handleConfirmStatus(exp);
           }
         }}
+      />
+
+      <ExpenseDeleteModal
+        expense={expenseToDelete}
+        isOpen={!!expenseToDelete}
+        onClose={() => setExpenseToDelete(null)}
+        onConfirm={handleConfirmDelete}
       />
     </>
   );

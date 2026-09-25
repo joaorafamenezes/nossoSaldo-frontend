@@ -3,6 +3,7 @@ import { Categoria, Gasto, StatusGasto } from '../../types/financial';
 import { useAppStore } from '../../stores/useAppStore';
 import { Button } from '../../components/ui/Button';
 import { Badge } from '../../components/ui/Badge';
+import { ExpenseDeleteModal } from '../expenses/ExpenseDeleteModal';
 import {
   X,
   Search,
@@ -58,6 +59,7 @@ export function CategoryExpensesModal({ isOpen, onClose, category }: CategoryExp
   const [statusFilter, setStatusFilter] = React.useState<'todos' | StatusGasto>('todos');
   const [typeFilter, setTypeFilter] = React.useState<'todos' | 'despesa' | 'receita'>('todos');
   const [sortBy, setSortBy] = React.useState<'date_desc' | 'date_asc' | 'val_desc' | 'val_asc'>('date_desc');
+  const [expenseToDelete, setExpenseToDelete] = React.useState<Gasto | null>(null);
 
   // Keyboard shortcut: ESC to close
   React.useEffect(() => {
@@ -159,10 +161,19 @@ export function CategoryExpensesModal({ isOpen, onClose, category }: CategoryExp
     toggleExpenseStatus(expense.id, selectedCompetencia);
   };
 
-  const handleDeleteItem = async (expense: Gasto) => {
-    if (confirm(`Deseja excluir o lançamento "${expense.descricao}"?`)) {
-      await deleteExpense(expense.id);
-      toast.success(`Lançamento "${expense.descricao}" excluído com sucesso!`);
+  const handleDeleteItem = (expense: Gasto) => {
+    setExpenseToDelete(expense);
+  };
+
+  const handleConfirmDelete = async (expense?: Gasto) => {
+    const target = expense || expenseToDelete;
+    if (!target) return;
+    try {
+      await deleteExpense(target.id);
+      toast.success(`Lançamento "${target.descricao}" excluído com sucesso!`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao excluir lançamento.');
+      throw err;
     }
   };
 
@@ -492,6 +503,13 @@ export function CategoryExpensesModal({ isOpen, onClose, category }: CategoryExp
           </Button>
         </div>
       </div>
+
+      <ExpenseDeleteModal
+        expense={expenseToDelete}
+        isOpen={!!expenseToDelete}
+        onClose={() => setExpenseToDelete(null)}
+        onConfirm={handleConfirmDelete}
+      />
     </div>
   );
 }
