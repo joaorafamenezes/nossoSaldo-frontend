@@ -20,6 +20,7 @@ import {
   ChevronDown,
   ChevronRight,
   RotateCcw,
+  FileText,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { toast } from 'sonner';
@@ -187,6 +188,12 @@ export function ExpenseTable({
                             </span>
                           )}
                         </div>
+                        {expense.observacao && (
+                          <div className="text-[11px] text-zinc-400 font-normal mt-1 flex items-center gap-1.5" title={expense.observacao}>
+                            <FileText className="h-3 w-3 text-zinc-500 shrink-0" />
+                            <span className="truncate max-w-[280px]">{expense.observacao}</span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Category */}
