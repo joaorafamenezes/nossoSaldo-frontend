@@ -448,7 +448,7 @@ export function ExpenseCategoryAccordion({
                               )}
                             </div>
 
-                            {/* Title & Competence Subtitle */}
+                            {/* Title */}
                             <div>
                               <h4
                                 className={`text-base font-bold truncate ${
@@ -457,9 +457,6 @@ export function ExpenseCategoryAccordion({
                               >
                                 {expense.descricao}
                               </h4>
-                              <p className="text-xs text-slate-500 dark:text-zinc-400 font-mono mt-0.5">
-                                Competência: {expense.origemLancamento === 'recorrente' ? `${selectedCompetencia.split('-')[1]}/${selectedCompetencia.split('-')[0]} (Recorrente)` : `${expense.competencia.split('-')[1]}/${expense.competencia.split('-')[0]}`}
-                              </p>
                             </div>
 
                             {/* Pill Metadata Tags */}
