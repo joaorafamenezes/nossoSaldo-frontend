@@ -8,19 +8,22 @@ import { ExpenseDrawerForm } from './ExpenseDrawerForm';
 import { BatchActionsBar } from './BatchActionsBar';
 import { ExpenseDeleteModal } from './ExpenseDeleteModal';
 import { Button } from '../../components/ui/Button';
-import { PlusCircle, Receipt } from 'lucide-react';
+import { PlusCircle, Receipt, CreditCard, CheckCircle2 } from 'lucide-react';
 import { StatusGasto } from '../../types/financial';
 import {
   getEffectiveExpenseValue,
   getEffectiveExpenseDueDate,
   getEffectiveExpenseStatus,
   getExpensesForCompetence,
+  formatCurrency,
 } from '../../lib/utils';
 import { toast } from 'sonner';
 
 export function ExpensesPage() {
   const {
     expenses,
+    cards,
+    invoices,
     jointInfo,
     selectedCompetencia,
     dateFilterMode,
@@ -130,6 +133,50 @@ export function ExpensesPage() {
       return true;
     });
   }, [expenses, jointInfo, selectedCompetencia, effectiveStartDate, effectiveEndDate, searchQuery, selectedType, selectedStatus, selectedCategoryId, selectedResponsavelId, selectedCardId]);
+
+  const selectedCard = React.useMemo(() => {
+    return cards.find((c) => c.id === selectedCardId);
+  }, [cards, selectedCardId]);
+
+  const matchingInvoice = React.useMemo(() => {
+    if (!selectedCardId || selectedCardId === 'todos' || selectedCardId === 'sem_cartao') return null;
+    return invoices.find(
+      (inv) => inv.cartaoCreditoId === selectedCardId && inv.competencia === selectedCompetencia
+    );
+  }, [invoices, selectedCardId, selectedCompetencia]);
+
+  // All expenses belonging to this card in the selected competence (ignoring local status / responsible filters)
+  const allCardExpensesInCompetence = React.useMemo(() => {
+    if (!selectedCardId || selectedCardId === 'todos' || selectedCardId === 'sem_cartao') return [];
+    const competenceExpenses = getExpensesForCompetence(
+      expenses,
+      selectedCompetencia,
+      effectiveStartDate,
+      effectiveEndDate
+    );
+    return competenceExpenses.filter((item) => item.cartaoCreditoId === selectedCardId);
+  }, [expenses, selectedCardId, selectedCompetencia, effectiveStartDate, effectiveEndDate]);
+
+  const allCardExpensesTotal = React.useMemo(() => {
+    return allCardExpensesInCompetence.reduce(
+      (acc, curr) => acc + getEffectiveExpenseValue(curr, selectedCompetencia, effectiveStartDate, effectiveEndDate),
+      0
+    );
+  }, [allCardExpensesInCompetence, selectedCompetencia, effectiveStartDate, effectiveEndDate]);
+
+  const visibleCardExpensesTotal = React.useMemo(() => {
+    if (!selectedCardId || selectedCardId === 'todos' || selectedCardId === 'sem_cartao') return 0;
+    return filteredExpenses.reduce(
+      (acc, curr) => acc + getEffectiveExpenseValue(curr, selectedCompetencia, effectiveStartDate, effectiveEndDate),
+      0
+    );
+  }, [filteredExpenses, selectedCardId, selectedCompetencia, effectiveStartDate, effectiveEndDate]);
+
+  const invoiceAmount = matchingInvoice?.valorTotal ?? allCardExpensesTotal;
+  const hasFilterDivergence = React.useMemo(() => {
+    if (!selectedCardId || selectedCardId === 'todos' || selectedCardId === 'sem_cartao') return false;
+    return Math.abs(invoiceAmount - visibleCardExpensesTotal) > 0.009;
+  }, [selectedCardId, invoiceAmount, visibleCardExpensesTotal]);
 
   const handleToggleSelect = (id: string) => {
     setSelectedIds((prev) =>
@@ -261,6 +308,80 @@ export function ExpensesPage() {
               Ver mês completo
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Credit Card Invoice Reconciliation & Conformity Banner */}
+      {selectedCard && (
+        <div
+          data-testid="card-reconciliation-banner"
+          className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl border transition-all text-xs ${
+            hasFilterDivergence
+              ? 'bg-purple-950/20 border-purple-500/30 text-purple-200 shadow-xs'
+              : 'bg-zinc-900/60 border-zinc-800 text-zinc-300'
+          }`}
+        >
+          <div className="flex items-start sm:items-center gap-3">
+            <div
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border ${
+                hasFilterDivergence
+                  ? 'bg-purple-900/40 border-purple-500/30 text-purple-400'
+                  : 'bg-emerald-950/40 border-emerald-500/30 text-emerald-400'
+              }`}
+            >
+              <CreditCard className="h-4 w-4" />
+            </div>
+
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-zinc-100">
+                  Conciliação do Cartão: {selectedCard.descricao}
+                </span>
+                <span className="font-mono font-semibold px-2 py-0.5 rounded-md bg-zinc-800 text-zinc-200 border border-zinc-700/60 text-[11px]">
+                  Fatura ({selectedCompetencia}): {formatCurrency(invoiceAmount)}
+                </span>
+                {hasFilterDivergence ? (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-300 bg-amber-950/40 border border-amber-500/30 px-2 py-0.5 rounded-md">
+                    Subtotal com filtros: {formatCurrency(visibleCardExpensesTotal)}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-950/40 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Em conformidade ({filteredExpenses.length} lançamentos)
+                  </span>
+                )}
+              </div>
+
+              {hasFilterDivergence ? (
+                <p className="text-[11px] text-zinc-400 mt-1">
+                  Exibindo <strong>{filteredExpenses.length}</strong> de <strong>{allCardExpensesInCompetence.length} lançamentos</strong> deste cartão devido aos filtros aplicados
+                  {selectedStatus !== 'todos' && ` • Status: ${selectedStatus}`}
+                  {selectedResponsavelId !== 'todos' && ` • Responsável filtrado`}.
+                </p>
+              ) : (
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  Todos os lançamentos vinculados à fatura deste cartão no período estão sendo exibidos integralmente.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {hasFilterDivergence && (
+            <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedStatus('todos');
+                  setSelectedResponsavelId('todos');
+                  toast.info('Filtros redefinidos para exibir a fatura completa do cartão.');
+                }}
+                className="text-xs border-purple-500/40 hover:bg-purple-900/30 text-purple-200 font-medium"
+              >
+                Ver Fatura Completa ({formatCurrency(invoiceAmount)})
+              </Button>
+            </div>
+          )}
         </div>
       )}
 

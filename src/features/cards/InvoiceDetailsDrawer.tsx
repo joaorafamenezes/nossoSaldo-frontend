@@ -2,7 +2,7 @@ import * as React from 'react';
 import { FaturaCartao, CartaoCredito } from '../../types/cards';
 import { useAppStore } from '../../stores/useAppStore';
 import { MoneyDisplay } from '../../components/common/MoneyDisplay';
-import { formatDate } from '../../lib/utils';
+import { formatDate, formatCurrency, getEffectiveExpenseValue, getEffectiveExpenseStatus } from '../../lib/utils';
 import * as api from '../../services/api';
 import {
   X,
@@ -55,6 +55,8 @@ export function InvoiceDetailsDrawer({ invoice, card, onClose }: InvoiceDetailsD
   const [isLoading, setIsLoading] = React.useState(true);
   const [searchQuery, setSearchQuery] = React.useState('');
   const [selectedCategory, setSelectedCategory] = React.useState<string>('all');
+  const [selectedResponsavel, setSelectedResponsavel] = React.useState<string>('all');
+  const [selectedStatus, setSelectedStatus] = React.useState<string>('all');
   const [sortBy, setSortBy] = React.useState<'date_asc' | 'date_desc' | 'val_desc' | 'val_asc'>('date_asc');
   const [isConfirming, setIsConfirming] = React.useState(false);
   const [isReopeningConfirming, setIsReopeningConfirming] = React.useState(false);
@@ -81,17 +83,23 @@ export function InvoiceDetailsDrawer({ invoice, card, onClose }: InvoiceDetailsD
     // Fallback: Use in-memory expenses
     if (card) {
       const localMatches = expenses.filter(
-        (e) => e.faturaCartaoId === invoice.id || e.cartaoCreditoId === card.id
+        (e) =>
+          e.faturaCartaoId === invoice.id ||
+          (e.cartaoCreditoId === card.id &&
+            (e.competencia?.startsWith(invoice.competencia) ||
+              e.dataVencimento?.startsWith(invoice.competencia)))
       );
       const mapped: ExtratoItem[] = localMatches.map((exp) => {
         const cat = categories.find((c) => c.id === exp.categoriaId);
+        const effectiveVal = getEffectiveExpenseValue(exp, invoice.competencia);
+        const { effectiveStatus, effectiveDueDate } = getEffectiveExpenseStatus(exp, invoice.competencia);
         return {
           id: exp.id,
           gastoId: exp.id,
           descricao: exp.descricao,
-          valor: exp.valor,
-          dataVencimento: exp.dataVencimento,
-          status: exp.status,
+          valor: effectiveVal,
+          dataVencimento: effectiveDueDate || exp.dataVencimento,
+          status: effectiveStatus,
           origemLancamento: exp.origemLancamento,
           parcelaAtual: exp.parcelaAtual || null,
           numeroParcelas: exp.numeroParcelas || null,
@@ -144,6 +152,46 @@ export function InvoiceDetailsDrawer({ invoice, card, onClose }: InvoiceDetailsD
     return Array.from(catsMap.values());
   }, [extratoItems]);
 
+  // Unique responsibles in this invoice
+  const invoiceResponsibles = React.useMemo(() => {
+    const respMap = new Map<
+      string,
+      { id: string; nome: string; count: number; total: number; totalPendente: number; totalPago: number }
+    >();
+    for (const item of extratoItems) {
+      const name = item.responsavelNome || 'Usuário';
+      const id = item.responsavelId || name;
+      const existing = respMap.get(id) || {
+        id,
+        nome: name,
+        count: 0,
+        total: 0,
+        totalPendente: 0,
+        totalPago: 0,
+      };
+      existing.count += 1;
+      existing.total += item.valor;
+      if (item.status === 'pago') {
+        existing.totalPago += item.valor;
+      } else {
+        existing.totalPendente += item.valor;
+      }
+      respMap.set(id, existing);
+    }
+    return Array.from(respMap.values());
+  }, [extratoItems]);
+
+  // Status breakdown (Pendentes vs Pagos antecipadamente)
+  const invoiceStatusSummary = React.useMemo(() => {
+    let pendente = 0;
+    let pago = 0;
+    for (const item of extratoItems) {
+      if (item.status === 'pago') pago += item.valor;
+      else pendente += item.valor;
+    }
+    return { pendente, pago };
+  }, [extratoItems]);
+
   // Filter and sort items
   const filteredItems = React.useMemo(() => {
     let result = [...extratoItems];
@@ -162,6 +210,20 @@ export function InvoiceDetailsDrawer({ invoice, card, onClose }: InvoiceDetailsD
       result = result.filter((item) => item.categoriaId === selectedCategory);
     }
 
+    if (selectedResponsavel !== 'all') {
+      result = result.filter(
+        (item) => (item.responsavelId || item.responsavelNome) === selectedResponsavel
+      );
+    }
+
+    if (selectedStatus === 'pendente') {
+      result = result.filter((item) => item.status !== 'pago');
+    } else if (selectedStatus === 'pago') {
+      result = result.filter((item) => item.status === 'pago');
+    } else if (selectedStatus !== 'all') {
+      result = result.filter((item) => item.status === selectedStatus);
+    }
+
     result.sort((a, b) => {
       const dateA = new Date(a.dataVencimento).getTime() || 0;
       const dateB = new Date(b.dataVencimento).getTime() || 0;
@@ -173,7 +235,7 @@ export function InvoiceDetailsDrawer({ invoice, card, onClose }: InvoiceDetailsD
     });
 
     return result;
-  }, [extratoItems, searchQuery, selectedCategory, sortBy]);
+  }, [extratoItems, searchQuery, selectedCategory, selectedResponsavel, selectedStatus, sortBy]);
 
   const itemsTotalSum = filteredItems.reduce((acc, curr) => acc + curr.valor, 0);
 
@@ -292,6 +354,117 @@ export function InvoiceDetailsDrawer({ invoice, card, onClose }: InvoiceDetailsD
             )}
           </div>
 
+          {/* Responsible & Status Breakdown */}
+          {extratoItems.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" data-testid="invoice-composition-breakdown">
+              {/* Responsible breakdown */}
+              <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-3 space-y-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <User className="h-3 w-3 text-purple-400" />
+                    Divisão por Responsável
+                  </span>
+                  {selectedResponsavel !== 'all' && (
+                    <button
+                      onClick={() => setSelectedResponsavel('all')}
+                      className="text-[10px] text-purple-400 hover:underline"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </span>
+                <div className="space-y-1.5">
+                  {invoiceResponsibles.map((resp) => {
+                    const isSelected = selectedResponsavel === resp.id;
+                    return (
+                      <div
+                        key={resp.id}
+                        onClick={() => setSelectedResponsavel(isSelected ? 'all' : resp.id)}
+                        className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                          isSelected
+                            ? 'bg-purple-500/20 border-purple-500/50 text-purple-200'
+                            : 'bg-zinc-900/60 border-zinc-800/80 text-zinc-300 hover:border-zinc-700'
+                        }`}
+                        title={`Filtrar lançamentos de ${resp.nome}`}
+                      >
+                        <div className="min-w-0 pr-2">
+                          <span className="font-semibold truncate block">{resp.nome}</span>
+                          <span className="text-[10px] text-zinc-400">
+                            {resp.count} {resp.count === 1 ? 'item' : 'itens'}
+                          </span>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="font-mono font-bold">{formatCurrency(resp.total)}</span>
+                          {resp.totalPendente > 0 && resp.totalPago > 0 && (
+                            <span className="block text-[10px] text-amber-400/90 font-mono">
+                              Pend: {formatCurrency(resp.totalPendente)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Status breakdown */}
+              <div className="rounded-xl border border-zinc-800/80 bg-zinc-950/60 p-3 space-y-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 flex items-center justify-between">
+                  <span className="flex items-center gap-1.5">
+                    <CheckCircle2 className="h-3 w-3 text-emerald-400" />
+                    Situação dos Lançamentos
+                  </span>
+                  {selectedStatus !== 'all' && (
+                    <button
+                      onClick={() => setSelectedStatus('all')}
+                      className="text-[10px] text-emerald-400 hover:underline"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </span>
+                <div className="space-y-1.5">
+                  <div
+                    onClick={() => setSelectedStatus(selectedStatus === 'pendente' ? 'all' : 'pendente')}
+                    className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                      selectedStatus === 'pendente'
+                        ? 'bg-amber-500/20 border-amber-500/50 text-amber-200'
+                        : 'bg-zinc-900/60 border-zinc-800/80 text-zinc-300 hover:border-zinc-700'
+                    }`}
+                    title="Filtrar lançamentos pendentes"
+                  >
+                    <div>
+                      <span className="font-semibold block">Pendente na fatura</span>
+                      <span className="text-[10px] text-zinc-400">A liquidar no fechamento</span>
+                    </div>
+                    <span className="font-mono font-bold text-amber-400">
+                      {formatCurrency(invoiceStatusSummary.pendente)}
+                    </span>
+                  </div>
+                  {invoiceStatusSummary.pago > 0 && (
+                    <div
+                      onClick={() => setSelectedStatus(selectedStatus === 'pago' ? 'all' : 'pago')}
+                      className={`flex items-center justify-between p-2 rounded-lg border text-xs cursor-pointer transition-colors ${
+                        selectedStatus === 'pago'
+                          ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200'
+                          : 'bg-zinc-900/60 border-zinc-800/80 text-zinc-300 hover:border-zinc-700'
+                      }`}
+                      title="Filtrar lançamentos já pagos antecipadamente"
+                    >
+                      <div>
+                        <span className="font-semibold block">Pago antecipado</span>
+                        <span className="text-[10px] text-zinc-400">Parcelas liquidadas</span>
+                      </div>
+                      <span className="font-mono font-bold text-emerald-400">
+                        {formatCurrency(invoiceStatusSummary.pago)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Suspicious duplicates / irregularidade alert */}
           {duplicateAlerts.length > 0 && (
             <div className="rounded-xl border border-amber-500/30 bg-amber-950/20 p-3.5 flex items-start gap-3 animate-in fade-in">
@@ -380,15 +553,56 @@ export function InvoiceDetailsDrawer({ invoice, card, onClose }: InvoiceDetailsD
                 ))}
               </div>
             )}
+
+            {/* Active Filters Pill Bar */}
+            {(selectedResponsavel !== 'all' || selectedStatus !== 'all' || selectedCategory !== 'all') && (
+              <div
+                data-testid="invoice-active-filters-banner"
+                className="flex items-center justify-between p-2.5 rounded-xl bg-purple-950/30 border border-purple-500/30 text-xs text-purple-200"
+              >
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-zinc-300">Filtro ativo:</span>
+                  {selectedResponsavel !== 'all' && (
+                    <span className="bg-purple-500/20 px-2 py-0.5 rounded text-[11px] border border-purple-500/40">
+                      👤 {invoiceResponsibles.find((r) => r.id === selectedResponsavel)?.nome || 'Responsável'}
+                    </span>
+                  )}
+                  {selectedStatus !== 'all' && (
+                    <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded text-[11px] border border-amber-500/40 capitalize">
+                      {selectedStatus}
+                    </span>
+                  )}
+                  {selectedCategory !== 'all' && (
+                    <span className="bg-zinc-800 px-2 py-0.5 rounded text-[11px] border border-zinc-700">
+                      {invoiceCategories.find((c) => c.id === selectedCategory)?.nome || 'Categoria'}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedResponsavel('all');
+                    setSelectedStatus('all');
+                    setSelectedCategory('all');
+                  }}
+                  className="text-xs text-purple-300 hover:text-white underline font-medium ml-2 shrink-0"
+                >
+                  Ver Fatura Completa ({formatCurrency(invoice.valorTotal)})
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Extrato Items List */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-zinc-400">
-              <span>Lançamentos Analisados ({filteredItems.length})</span>
-              {filteredItems.length !== extratoItems.length && (
+              <span>Lançamentos ({filteredItems.length})</span>
+              {filteredItems.length !== extratoItems.length ? (
+                <span className="text-[11px] text-zinc-300 normal-case bg-zinc-950 px-2.5 py-1 rounded-lg border border-zinc-800">
+                  Subtotal filtrado: <strong className="text-zinc-100 font-mono">{formatCurrency(itemsTotalSum)}</strong> de <span className="text-zinc-400 font-mono">{formatCurrency(invoice.valorTotal)}</span>
+                </span>
+              ) : (
                 <span className="text-[11px] text-zinc-400 normal-case">
-                  Soma dos filtrados: <strong className="text-zinc-200">R$ {itemsTotalSum.toFixed(2)}</strong>
+                  Total: <strong className="text-zinc-200 font-mono">{formatCurrency(invoice.valorTotal)}</strong>
                 </span>
               )}
             </div>

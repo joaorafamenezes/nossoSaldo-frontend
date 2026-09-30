@@ -406,7 +406,8 @@ export function getExpensesForCompetence<T extends {
   endDate?: string
 ): T[] {
   const nonRecurring: T[] = [];
-  const recurringBySeries = new Map<string, T[]>();
+  const seriesGroups: T[][] = [];
+  const keyToGroup = new Map<string, T[]>();
 
   // 1. Separa lançamentos comuns e agrupa ocorrências da mesma série recorrente
   for (const item of expenses) {
@@ -450,10 +451,30 @@ export function getExpensesForCompetence<T extends {
       }
     } else {
       const descClean = (item.descricao || '').trim().toLowerCase();
-      const seriesKey = item.recorrenciaPaiId || `rec_${descClean}_${item.categoriaId || ''}_${item.responsavelId || ''}`;
-      const group = recurringBySeries.get(seriesKey) || [];
+      const descKey = `desc:${descClean}_${item.categoriaId || ''}_${item.responsavelId || ''}`;
+      const parentKey = item.recorrenciaPaiId ? `parent:${item.recorrenciaPaiId}` : null;
+      const selfKey = item.id ? `self:${item.id}` : null;
+
+      let group: T[] | undefined;
+      if (parentKey && keyToGroup.has(parentKey)) {
+        group = keyToGroup.get(parentKey);
+      } else if (selfKey && keyToGroup.has(selfKey)) {
+        group = keyToGroup.get(selfKey);
+      } else if (keyToGroup.has(descKey)) {
+        group = keyToGroup.get(descKey);
+      }
+
+      if (!group) {
+        group = [];
+        seriesGroups.push(group);
+      }
+
       group.push(item);
-      recurringBySeries.set(seriesKey, group);
+
+      keyToGroup.set(descKey, group);
+      if (selfKey) keyToGroup.set(selfKey, group);
+      if (parentKey) keyToGroup.set(parentKey, group);
+      if (item.id) keyToGroup.set(`parent:${item.id}`, group);
     }
   }
 
@@ -465,7 +486,7 @@ export function getExpensesForCompetence<T extends {
   const recurringResult: T[] = [];
 
   // 3. Para cada série recorrente, projeta no máximo 1 ocorrência por mês do período
-  for (const [, seriesItems] of recurringBySeries.entries()) {
+  for (const seriesItems of seriesGroups) {
     const startMonth = (
       seriesItems.find((i) => i.dataInicioRecorrencia)?.dataInicioRecorrencia ||
       seriesItems[0]?.competencia ||
