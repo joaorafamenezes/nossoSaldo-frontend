@@ -896,3 +896,396 @@ export function getCategoryBudgetAlerts(
   return statuses.sort((a, b) => b.percentage - a.percentage);
 }
 
+export interface UpcomingBillItem {
+  id: string;
+  expenseId: string;
+  installmentId?: string;
+  isInstallment: boolean;
+  descricao: string;
+  valor: number;
+  dataVencimento: string;
+  status: 'pendente' | 'pago' | 'atrasado' | 'cancelado' | string;
+  isPaid: boolean;
+  isOverdue: boolean;
+  daysDiff: number;
+  origemLancamento?: string;
+  cartaoNome?: string;
+}
+
+/**
+ * Retorna a data de vencimento da fatura associada a um lançamento ou parcela.
+ * Em caso de compras no cartão ou parcelamentos em fatura, prioriza:
+ * 1. Data de vencimento da FaturaCartao vinculada (por faturaCartaoId)
+ * 2. Data de vencimento da fatura encontrada por cartaoCreditoId e competência
+ * 3. Cálculo dinâmico da fatura com base nas regras do cartão (diaVencimento / diaFechamento)
+ * 4. Data de vencimento da parcela (dataVencimentoParcela)
+ * 5. Data de vencimento do registro pai
+ */
+export function resolveFaturaDueDate(
+  item: {
+    dataVencimento?: string;
+    dataVencimentoParcela?: string;
+    competencia?: string;
+    faturaCartaoId?: string;
+    faturaCartaoCompetencia?: string;
+    cartaoCreditoId?: string;
+  },
+  invoices: Array<{ id: string; cartaoCreditoId?: string; competencia?: string; dataVencimento: string }> = [],
+  cards: Array<{ id: string; diaFechamento?: number; diaVencimento?: number }> = []
+): string {
+  if (!item) return '';
+
+  // 1. Busca direta por faturaCartaoId
+  if (item.faturaCartaoId && invoices.length > 0) {
+    const inv = invoices.find((i) => i.id === item.faturaCartaoId);
+    if (inv?.dataVencimento) {
+      return inv.dataVencimento.split('T')[0];
+    }
+  }
+
+  // 2. Busca por cartaoCreditoId e competência da fatura
+  if (item.cartaoCreditoId && invoices.length > 0) {
+    const comp = (item.faturaCartaoCompetencia || item.competencia || '').substring(0, 7);
+    if (comp) {
+      const inv = invoices.find(
+        (i) => i.cartaoCreditoId === item.cartaoCreditoId && i.competencia.startsWith(comp)
+      );
+      if (inv?.dataVencimento) {
+        return inv.dataVencimento.split('T')[0];
+      }
+    }
+  }
+
+  // 3. Cálculo dinâmico pelo ciclo de fechamento/vencimento do cartão
+  if (item.cartaoCreditoId && cards.length > 0) {
+    const card = cards.find((c) => c.id === item.cartaoCreditoId);
+    if (card) {
+      const refDate = item.faturaCartaoCompetencia || item.competencia || item.dataVencimentoParcela || item.dataVencimento;
+      return calculateCardDueDate(card, refDate);
+    }
+  }
+
+  // 4. Parcela avulsa com data de vencimento própria
+  if (item.dataVencimentoParcela) {
+    return item.dataVencimentoParcela.split('T')[0];
+  }
+
+  // 5. Data de vencimento original do registro pai
+  return (item.dataVencimento || '').split('T')[0];
+}
+
+/**
+ * Retorna os próximos vencimentos a serem monitorados na tela principal (Dashboard).
+ * Em caso de compras no cartão ou parcelamentos, monitora a data de vencimento da fatura/parcela
+ * e o valor individual da parcela, e não o registro pai.
+ * Prioriza itens pendentes/atrasados ordenados cronologicamente:
+ * - Parcelas vencidas aparecem primeiro (as mais distantes da data atual na ordem cronológica)
+ * - Seguidas pelas parcelas próximas a vencer
+ * - Preenchidas por itens pagos do período caso restem vagas
+ */
+export function getUpcomingBills(params: {
+  expenses: Array<{
+    id: string;
+    descricao: string;
+    tipo?: string;
+    status?: string;
+    origemLancamento?: string;
+    numeroParcelas?: number;
+    parcelaAtual?: number;
+    valor?: number;
+    competencia?: string;
+    dataVencimento?: string;
+    dataInicioRecorrencia?: string;
+    dataFimRecorrencia?: string;
+    recorrenciaId?: string;
+    recorrenciaPaiId?: string;
+    categoriaId?: string;
+    responsavelId?: string;
+    cartaoCreditoId?: string;
+    cartaoNome?: string;
+    faturaCartaoId?: string;
+    lancamentosBase?: Array<{
+      id: string;
+      gastoId?: string;
+      descricao?: string;
+      valorParcela?: number;
+      numeroParcela?: number;
+      dataVencimentoParcela?: string;
+      status?: string;
+      competencia?: string;
+      faturaCartaoId?: string;
+      faturaCartaoCompetencia?: string;
+    }>;
+  }>;
+  invoices?: Array<{
+    id: string;
+    cartaoCreditoId?: string;
+    competencia?: string;
+    dataVencimento: string;
+    status?: string;
+  }>;
+  cards?: Array<{
+    id: string;
+    diaFechamento?: number;
+    diaVencimento?: number;
+    descricao?: string;
+  }>;
+  selectedCompetencia?: string;
+  limit?: number;
+}): UpcomingBillItem[] {
+  const {
+    expenses = [],
+    invoices = [],
+    cards = [],
+    selectedCompetencia = getCurrentCompetencia(),
+    limit = 5,
+  } = params;
+
+  const candidates: UpcomingBillItem[] = [];
+
+  // Separa despesas não canceladas em recorrentes e não recorrentes
+  const recurringItems: typeof expenses = [];
+  const nonRecurringItems: typeof expenses = [];
+
+  for (const exp of expenses) {
+    if (exp.tipo !== 'despesa' || exp.status === 'cancelado') {
+      continue;
+    }
+    if (exp.origemLancamento === 'recorrente') {
+      recurringItems.push(exp);
+    } else {
+      nonRecurringItems.push(exp);
+    }
+  }
+
+  // 1. Processa Lançamentos Parcelados e Únicos (não recorrentes)
+  for (const exp of nonRecurringItems) {
+    const isParcelado =
+      exp.origemLancamento === 'parcelado' ||
+      (exp.lancamentosBase && exp.lancamentosBase.length > 0) ||
+      (Number(exp.numeroParcelas || 0) > 1);
+
+    if (isParcelado) {
+      const installments: Array<{
+        id: string;
+        gastoId?: string;
+        descricao?: string;
+        valorParcela?: number;
+        numeroParcela?: number;
+        dataVencimentoParcela?: string;
+        status?: string;
+        competencia?: string;
+        faturaCartaoId?: string;
+        faturaCartaoCompetencia?: string;
+      }> =
+        exp.lancamentosBase && exp.lancamentosBase.length > 0
+          ? exp.lancamentosBase
+          : Array.from({ length: exp.numeroParcelas || 1 }, (_, idx) => {
+              const num = idx + 1;
+              const baseDate = new Date(exp.dataVencimento || new Date());
+              baseDate.setMonth(baseDate.getMonth() + idx);
+              const dueStr = baseDate.toISOString().split('T')[0];
+              return {
+                id: `temp-${exp.id}-${num}`,
+                gastoId: exp.id,
+                descricao: `${exp.descricao} - parcela ${num}/${exp.numeroParcelas || 1}`,
+                numeroParcela: num,
+                valorParcela: (exp.valor || 0) / (exp.numeroParcelas || 1),
+                dataVencimentoParcela: dueStr,
+                status:
+                  num <= (exp.parcelaAtual || 1) && exp.status === 'pago'
+                    ? 'pago'
+                    : 'pendente',
+                competencia: dueStr.substring(0, 7),
+                faturaCartaoId: undefined,
+                faturaCartaoCompetencia: undefined,
+              };
+            });
+
+      for (const lb of installments) {
+        // Se a parcela já estiver paga, não deve constar em Próximos Vencimentos
+        if (lb.status === 'pago') {
+          continue;
+        }
+
+        const dueDate = resolveFaturaDueDate(
+          {
+            dataVencimento: exp.dataVencimento,
+            dataVencimentoParcela: lb.dataVencimentoParcela,
+            competencia: lb.competencia || exp.competencia,
+            faturaCartaoId: lb.faturaCartaoId || exp.faturaCartaoId,
+            faturaCartaoCompetencia: lb.faturaCartaoCompetencia,
+            cartaoCreditoId: exp.cartaoCreditoId,
+          },
+          invoices,
+          cards
+        );
+
+        const daysDiff = dueDate ? getDaysDifference(dueDate) : 0;
+        const isOverdue = daysDiff < 0;
+        const totalParc = exp.numeroParcelas || installments.length;
+        const numParc = lb.numeroParcela || 1;
+        const descricao =
+          lb.descricao && lb.descricao !== exp.descricao
+            ? lb.descricao
+            : `${exp.descricao} (${numParc}/${totalParc})`;
+
+        candidates.push({
+          id: lb.id || `${exp.id}-parc-${numParc}`,
+          expenseId: exp.id,
+          installmentId: lb.id,
+          isInstallment: true,
+          descricao,
+          valor: Number(lb.valorParcela ?? (exp.valor || 0) / totalParc),
+          dataVencimento: dueDate,
+          status: isOverdue ? 'atrasado' : 'pendente',
+          isPaid: false,
+          isOverdue,
+          daysDiff,
+          origemLancamento: 'parcelado',
+          cartaoNome: exp.cartaoNome,
+        });
+      }
+    } else {
+      // Único / avulso: se já estiver pago, não deve figurar em Próximos Vencimentos
+      if (exp.status === 'pago') {
+        continue;
+      }
+
+      const dueDate = resolveFaturaDueDate(
+        {
+          dataVencimento: exp.dataVencimento,
+          competencia: exp.competencia,
+          faturaCartaoId: exp.faturaCartaoId,
+          cartaoCreditoId: exp.cartaoCreditoId,
+        },
+        invoices,
+        cards
+      );
+
+      const daysDiff = dueDate ? getDaysDifference(dueDate) : 0;
+      const isOverdue = daysDiff < 0;
+
+      candidates.push({
+        id: exp.id,
+        expenseId: exp.id,
+        isInstallment: false,
+        descricao: exp.descricao,
+        valor: Number(exp.valor || 0),
+        dataVencimento: dueDate,
+        status: isOverdue ? 'atrasado' : 'pendente',
+        isPaid: false,
+        isOverdue,
+        daysDiff,
+        origemLancamento: exp.origemLancamento || 'unico',
+        cartaoNome: exp.cartaoNome,
+      });
+    }
+  }
+
+  // 2. Processa Lançamentos Recorrentes com Deduplicação de Série
+  // Evita projetar registros legados ou instâncias de meses anteriores como pendências falsas
+  const seriesGroups: Array<typeof recurringItems> = [];
+  const keyToGroup = new Map<string, typeof recurringItems>();
+
+  for (const item of recurringItems) {
+    const descClean = (item.descricao || '').trim().toLowerCase();
+    const descKey = `desc:${descClean}_${item.categoriaId || ''}_${item.responsavelId || ''}`;
+    const recIdKey = item.recorrenciaId ? `rec:${item.recorrenciaId}` : null;
+    const parentKey = item.recorrenciaPaiId ? `parent:${item.recorrenciaPaiId}` : null;
+    const selfKey = item.id ? `self:${item.id}` : null;
+
+    let group: typeof recurringItems | undefined;
+    if (recIdKey && keyToGroup.has(recIdKey)) {
+      group = keyToGroup.get(recIdKey);
+    } else if (parentKey && keyToGroup.has(parentKey)) {
+      group = keyToGroup.get(parentKey);
+    } else if (selfKey && keyToGroup.has(selfKey)) {
+      group = keyToGroup.get(selfKey);
+    } else if (keyToGroup.has(descKey)) {
+      group = keyToGroup.get(descKey);
+    }
+
+    if (!group) {
+      group = [];
+      seriesGroups.push(group);
+    }
+
+    group.push(item);
+    keyToGroup.set(descKey, group);
+    if (recIdKey) keyToGroup.set(recIdKey, group);
+    if (selfKey) keyToGroup.set(selfKey, group);
+    if (parentKey) keyToGroup.set(parentKey, group);
+    if (item.id) keyToGroup.set(`parent:${item.id}`, group);
+  }
+
+  for (const seriesItems of seriesGroups) {
+    const startMonth = (
+      seriesItems.find((i) => i.dataInicioRecorrencia)?.dataInicioRecorrencia ||
+      seriesItems[0]?.competencia ||
+      seriesItems[0]?.dataVencimento ||
+      ''
+    ).substring(0, 7);
+
+    const endMonth = seriesItems.find((i) => i.dataFimRecorrencia)?.dataFimRecorrencia?.substring(0, 7) || null;
+
+    const isActive = (!startMonth || selectedCompetencia >= startMonth) && (!endMonth || selectedCompetencia <= endMonth);
+    if (!isActive) continue;
+
+    // Busca o registro físico correspondente à competência selecionada
+    const exactMonthItem = seriesItems.find(
+      (i) =>
+        (i.competencia && i.competencia.startsWith(selectedCompetencia)) ||
+        (i.dataVencimento && i.dataVencimento.startsWith(selectedCompetencia))
+    );
+
+    const chosenItem = exactMonthItem || seriesItems[seriesItems.length - 1] || seriesItems[0];
+    if (!chosenItem) continue;
+
+    const effStatus = getEffectiveExpenseStatus(
+      {
+        ...chosenItem,
+        status: exactMonthItem ? exactMonthItem.status : 'pendente',
+        dataVencimento: exactMonthItem?.dataVencimento || chosenItem.dataVencimento || '',
+        lancamentosBase: chosenItem.lancamentosBase?.map((l) => ({
+          ...l,
+          status: l.status || 'pendente',
+        })),
+      },
+      selectedCompetencia
+    );
+
+    // Se o lançamento da competência selecionada já estiver pago, NÃO aparece em Próximos Vencimentos
+    if (effStatus.isPaid) {
+      continue;
+    }
+
+    const dueDate = getEffectiveExpenseDueDate(chosenItem, selectedCompetencia);
+    const daysDiff = dueDate ? getDaysDifference(dueDate) : 0;
+    const isOverdue = daysDiff < 0;
+
+    candidates.push({
+      id: exactMonthItem ? exactMonthItem.id : `rec-${chosenItem.id}-${selectedCompetencia}`,
+      expenseId: chosenItem.id,
+      isInstallment: false,
+      descricao: chosenItem.descricao,
+      valor: getEffectiveExpenseValue(chosenItem, selectedCompetencia),
+      dataVencimento: dueDate,
+      status: isOverdue ? 'atrasado' : effStatus.effectiveStatus,
+      isPaid: false,
+      isOverdue,
+      daysDiff,
+      origemLancamento: 'recorrente',
+      cartaoNome: chosenItem.cartaoNome,
+    });
+  }
+
+  // Ordena itens não pagos por data de vencimento crescente:
+  // - Vencidas: as mais antigas (mais distantes da data atual no passado) vêm primeiro (CT001)
+  // - Futuras: as mais próximas de vencer vêm em seguida (CT002)
+  candidates.sort((a, b) => a.dataVencimento.localeCompare(b.dataVencimento));
+
+  return candidates.slice(0, limit);
+}
+
+

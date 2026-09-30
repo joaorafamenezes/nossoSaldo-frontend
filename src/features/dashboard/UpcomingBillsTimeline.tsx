@@ -2,30 +2,47 @@ import * as React from 'react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/Card';
 import { useAppStore } from '../../stores/useAppStore';
 import { MoneyDisplay } from '../../components/common/MoneyDisplay';
-import { formatDate, getDaysDifference } from '../../lib/utils';
-import { CheckCircle2, Clock, AlertCircle } from 'lucide-react';
-import { Badge } from '../../components/ui/Badge';
+import { formatDate, getUpcomingBills, UpcomingBillItem } from '../../lib/utils';
+import { CheckCircle2, Clock } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { toast } from 'sonner';
 
 export function UpcomingBillsTimeline() {
-  const { expenses, toggleExpenseStatus, selectedCompetencia } = useAppStore();
+  const {
+    expenses,
+    invoices,
+    cards,
+    toggleExpenseStatus,
+    toggleInstallmentStatus,
+    selectedCompetencia,
+  } = useAppStore();
 
   const upcomingBills = React.useMemo(() => {
-    return expenses
-      .filter((e) => e.tipo === 'despesa' && e.competencia.startsWith(selectedCompetencia))
-      .sort((a, b) => (a.dataVencimento > b.dataVencimento ? 1 : -1))
-      .slice(0, 5);
-  }, [expenses, selectedCompetencia]);
+    return getUpcomingBills({
+      expenses,
+      invoices,
+      cards,
+      selectedCompetencia,
+      limit: 5,
+    });
+  }, [expenses, invoices, cards, selectedCompetencia]);
 
-  const handlePay = (id: string, descricao: string) => {
+  const handlePay = async (bill: UpcomingBillItem) => {
     confetti({
       particleCount: 50,
       spread: 60,
       origin: { y: 0.8 },
     });
-    toggleExpenseStatus(id);
-    toast.success(`Gasto "${descricao}" marcado como pago!`);
+    if (bill.isInstallment && bill.installmentId) {
+      await toggleInstallmentStatus(bill.expenseId, bill.installmentId);
+    } else {
+      await toggleExpenseStatus(bill.expenseId, selectedCompetencia);
+    }
+    toast.success(
+      bill.isPaid
+        ? `"${bill.descricao}" marcado como pendente!`
+        : `"${bill.descricao}" marcado como pago!`
+    );
   };
 
   return (
@@ -33,7 +50,7 @@ export function UpcomingBillsTimeline() {
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle>Próximos Vencimentos</CardTitle>
-          <span className="text-xs text-zinc-500 font-mono">Top 5 do mês</span>
+          <span className="text-xs text-zinc-500 font-mono">Top 5</span>
         </div>
         <CardDescription>
           Contas e faturas programadas para os próximos dias
@@ -47,8 +64,8 @@ export function UpcomingBillsTimeline() {
           </div>
         ) : (
           upcomingBills.map((bill) => {
-            const isPaid = bill.status === 'pago';
-            const daysDiff = getDaysDifference(bill.dataVencimento);
+            const isPaid = bill.isPaid;
+            const daysDiff = bill.daysDiff;
 
             return (
               <div
@@ -61,7 +78,7 @@ export function UpcomingBillsTimeline() {
               >
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <button
-                    onClick={() => handlePay(bill.id, bill.descricao)}
+                    onClick={() => handlePay(bill)}
                     className="shrink-0 text-zinc-400 hover:text-emerald-400 transition-colors"
                     title={isPaid ? 'Marcar como pendente' : 'Marcar como pago'}
                   >

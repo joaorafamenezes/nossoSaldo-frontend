@@ -48,7 +48,11 @@ Quando `VITE_API_URL` nao e informado, o frontend usa a configuracao padrao defi
 - **Conciliação e Conformidade de Faturas de Cartão (`CT001` e `CT002`)**:
   - A fatura emitida pela instituição bancária é uma unidade indivisível que consolida todos os lançamentos cobrados no cartão durante aquele ciclo de faturamento (incluindo compras de ambos os titulares em contas conjuntas e parcelas já quitadas antecipadamente).
   - Na tela de **Gastos & Receitas**, ao filtrar por um cartão específico, o sistema exibe o `CardInvoiceReconciliationBanner` (`data-testid="card-reconciliation-banner"`). Se houver filtros restritivos ativos (como responsável específico ou status `pendente`) que ocultem itens da fatura, o banner indica com clareza o subtotal filtrado (ex: R$ 482,43) em relação à fatura total do cartão (ex: R$ 672,43), e disponibiliza o botão "Ver Fatura Completa" para redefinir os filtros e alinhar a visualização com a fatura oficial.
-  - Na tela de **Cartões de Crédito & Faturas**, o `InvoiceDetailsDrawer` exibe o valor total consolidado e detalha a composição por responsável e por situação dos lançamentos (Pendentes vs Pagos antecipadamente), permitindo alternar filtros e inspecionar subtotais de cada responsável sem gerar ambiguidade com o valor oficial da fatura bancária.
+- **Monitoramento de Próximos Vencimentos na Tela Principal (Dashboard - CT001 e CT002)**:
+  - No widget "Próximos Vencimentos" (`UpcomingBillsTimeline`), em caso de faturas de cartão de crédito ou compras parceladas, o monitoramento prioriza a data de vencimento da fatura/parcela (`resolveFaturaDueDate`) e o valor individual da parcela, eliminando o comportamento que travava na data e no valor total do registro pai ("resultado do todo").
+  - **CT001 (Fatura Vencida)**: Se houver parcelas vencidas em algum registro, elas são priorizadas cronologicamente (as mais distantes da data atual no passado aparecem no topo) para chamar a atenção imediata do usuário sobre pendências atrasadas.
+  - **CT002 (Fatura Não Vencida, mas Próxima de Vencer)**: Parcelas e faturas programadas para os próximos dias compõem o top 5 ordenadas cronologicamente pela proximidade de vencimento.
+  - Ao interagir com o botão de pagamento no widget, se for uma parcela, a quitação é direcionada especificamente para aquela parcela (`toggleInstallmentStatus`), sem liquidar indevidamente o parcelamento inteiro.
 
 ## Desenvolvimento local
 
