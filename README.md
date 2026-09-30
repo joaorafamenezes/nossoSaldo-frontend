@@ -57,6 +57,10 @@ Quando `VITE_API_URL` nao e informado, o frontend usa a configuracao padrao defi
   - Na tela principal de acesso/login (`AuthPage`), os campos de e-mail e senha são renderizados habilitados e editáveis, e o botão de submissão "Acessar Plataforma" é apresentado em estado ocioso e desbloqueado (sem "Carregando..." ou spinner).
   - O botão gerencia seu estado de submissão de forma local (`isSubmitting`) e desacoplada do store global, enquanto o `useAuthStore` separa a verificação de sessão em segundo plano (`isCheckingSession`) do carregamento de login.
   - Elimina qualquer acionamento automático ou visual de carregamento na inicialização da página no navegador, permitindo que o usuário informe o e-mail e senha e clique deliberadamente no botão de acesso à plataforma.
+- **Fluxo de Caixa & Evolução do Mês (`CashflowChart`)**:
+  - O gráfico de fluxo de caixa consolida receitas e despesas acumuladas ao longo da competência utilizando `getExpensesForCompetence`, garantindo que salários e receitas recorrentes contínuas (mesmo criadas em meses anteriores) e parcelamentos a receber sejam plenamente contabilizados.
+  - A data de ocorrência efetiva (`getEffectiveExpenseDueDate` e `resolveFaturaDueDate`) e os valores individuais de parcelas e recorrências (`getEffectiveExpenseValue`) regem o momento exato em que o recurso entra ou sai do fluxo.
+  - O horizonte de marcos cobre desde o início até o último dia do mês (dias 5, 10, 15, 20, 25 e o último dia do mês vigente: 28, 29, 30 ou 31), eliminando truncamentos que ocultavam receitas nos dias 29 a 31, com suporte responsivo a quinzenas e períodos personalizados.
 
 ## Desenvolvimento local
 

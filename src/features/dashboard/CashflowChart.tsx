@@ -9,43 +9,107 @@ import {
   Tooltip,
   CartesianGrid,
 } from 'recharts';
-import { formatCurrency, formatShortCurrency } from '../../lib/utils';
+import {
+  formatCurrency,
+  formatShortCurrency,
+  getExpensesForCompetence,
+  getEffectiveExpenseDueDate,
+  getEffectiveExpenseValue,
+  resolveFaturaDueDate,
+} from '../../lib/utils';
 import { useAppStore } from '../../stores/useAppStore';
 
 export function CashflowChart() {
-  const { expenses, selectedCompetencia, isPrivacyMode } = useAppStore();
+  const {
+    expenses,
+    invoices = [],
+    cards = [],
+    selectedCompetencia,
+    isPrivacyMode,
+    dateFilterMode,
+    customStartDate,
+    customEndDate,
+  } = useAppStore();
+
+  const isCustomRange = dateFilterMode === 'custom' && Boolean(customStartDate && customEndDate);
+  const startDate = isCustomRange ? customStartDate : undefined;
+  const endDate = isCustomRange ? customEndDate : undefined;
+
+  const monthExpenses = React.useMemo(() => {
+    return getExpensesForCompetence(expenses, selectedCompetencia, startDate, endDate)
+      .filter((e) => e.status !== 'cancelado');
+  }, [expenses, selectedCompetencia, startDate, endDate]);
 
   const chartData = React.useMemo(() => {
-    const monthExpenses = expenses.filter((e) =>
-      e.competencia.startsWith(selectedCompetencia)
-    );
+    const getItemDueDate = (item: any) => {
+      if (item.cartaoCreditoId && (cards.length > 0 || invoices.length > 0)) {
+        const cardDueDate = resolveFaturaDueDate(item, invoices, cards);
+        if (cardDueDate) return cardDueDate;
+      }
+      return getEffectiveExpenseDueDate(item, selectedCompetencia);
+    };
 
-    const days = [5, 10, 15, 20, 25, 28];
-    let acumuladoReceitas = 0;
-    let acumuladoDespesas = 0;
+    let points: Array<{ label: string; dateStr: string }>;
 
-    return days.map((day) => {
-      const dayStr = `${selectedCompetencia}-${String(day).padStart(2, '0')}`;
-      
+    if (isCustomRange && customStartDate && customEndDate) {
+      const startD = new Date(customStartDate + 'T12:00:00');
+      const endD = new Date(customEndDate + 'T12:00:00');
+      const diffDays = Math.max(1, Math.round((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)));
+
+      if (diffDays <= 16) {
+        const startDay = startD.getDate();
+        const endDay = endD.getDate();
+        const midDay1 = Math.round(startDay + (endDay - startDay) * 0.33);
+        const midDay2 = Math.round(startDay + (endDay - startDay) * 0.66);
+        const uniqueDays = Array.from(new Set([startDay, midDay1, midDay2, endDay])).sort((a, b) => a - b);
+        const compPrefix = customStartDate.substring(0, 7);
+
+        points = uniqueDays.map((d) => ({
+          label: `Dia ${d}`,
+          dateStr: `${compPrefix}-${String(d).padStart(2, '0')}`,
+        }));
+      } else {
+        const step = Math.max(1, Math.floor(diffDays / 5));
+        points = [];
+        for (let i = 0; i <= 5; i++) {
+          const cur = new Date(startD.getTime() + Math.min(diffDays, i * step) * (1000 * 60 * 60 * 24));
+          const dateStr = cur.toISOString().split('T')[0];
+          points.push({
+            label: `${String(cur.getDate()).padStart(2, '0')}/${String(cur.getMonth() + 1).padStart(2, '0')}`,
+            dateStr,
+          });
+        }
+      }
+    } else {
+      const [yearStr, monthStr] = (selectedCompetencia || '2026-10').split('-');
+      const lastDay = new Date(Number(yearStr), Number(monthStr), 0).getDate();
+      const milestoneDays = [5, 10, 15, 20, 25, lastDay];
+
+      points = milestoneDays.map((day) => ({
+        label: `Dia ${day}`,
+        dateStr: `${selectedCompetencia}-${String(day).padStart(2, '0')}`,
+      }));
+    }
+
+    return points.map(({ label, dateStr }) => {
       const receitasAteHoje = monthExpenses
-        .filter((e) => e.tipo === 'receita' && e.dataVencimento <= dayStr)
-        .reduce((sum, e) => sum + e.valor, 0);
+        .filter((e) => e.tipo === 'receita')
+        .filter((e) => getItemDueDate(e) <= dateStr)
+        .reduce((sum, e) => sum + getEffectiveExpenseValue(e, selectedCompetencia, startDate, endDate), 0);
 
       const despesasAteHoje = monthExpenses
-        .filter((e) => e.tipo === 'despesa' && e.dataVencimento <= dayStr)
-        .reduce((sum, e) => sum + e.valor, 0);
-
-      acumuladoReceitas = receitasAteHoje;
-      acumuladoDespesas = despesasAteHoje;
+        .filter((e) => e.tipo === 'despesa')
+        .filter((e) => getItemDueDate(e) <= dateStr)
+        .reduce((sum, e) => sum + getEffectiveExpenseValue(e, selectedCompetencia, startDate, endDate), 0);
 
       return {
-        dia: `Dia ${day}`,
-        receitas: acumuladoReceitas,
-        despesas: acumuladoDespesas,
-        saldo: acumuladoReceitas - acumuladoDespesas,
+        dia: label,
+        receitas: receitasAteHoje,
+        despesas: despesasAteHoje,
+        saldo: receitasAteHoje - despesasAteHoje,
       };
     });
-  }, [expenses, selectedCompetencia]);
+  }, [monthExpenses, isCustomRange, customStartDate, customEndDate, selectedCompetencia, cards, invoices, startDate, endDate]);
 
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
