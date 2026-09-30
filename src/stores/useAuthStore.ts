@@ -8,6 +8,7 @@ interface AuthState {
   user: Usuario | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  isCheckingSession: boolean;
   error: string | null;
   login: (credentials: { email: string; senha: string }) => Promise<void>;
   register: (data: { nome: string; email: string; senha: string }) => Promise<void>;
@@ -23,6 +24,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: false,
+  isCheckingSession: false,
   error: null,
 
   login: async (credentials) => {
@@ -70,26 +72,26 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: () => {
     localStorage.removeItem(STORAGE_KEY);
     useAppStore.getState().resetStore();
-    set({ token: null, user: null, isAuthenticated: false });
+    set({ token: null, user: null, isAuthenticated: false, isLoading: false, isCheckingSession: false });
   },
 
   loadSession: async () => {
     const token = localStorage.getItem(STORAGE_KEY);
     if (!token) {
       useAppStore.getState().resetStore();
-      set({ isAuthenticated: false, user: null, token: null, isLoading: false });
+      set({ isAuthenticated: false, user: null, token: null, isLoading: false, isCheckingSession: false });
       return;
     }
 
-    set({ isLoading: true });
+    set({ isCheckingSession: true });
     try {
       const profile = await getProfile(token);
-      set({ user: profile, token, isAuthenticated: true, isLoading: false });
+      set({ user: profile, token, isAuthenticated: true, isLoading: false, isCheckingSession: false });
     } catch (err) {
       console.warn('Sessão expirada ou inválida na API. Redirecionando para login.');
       localStorage.removeItem(STORAGE_KEY);
       useAppStore.getState().resetStore();
-      set({ token: null, user: null, isAuthenticated: false, isLoading: false });
+      set({ token: null, user: null, isAuthenticated: false, isLoading: false, isCheckingSession: false });
     }
   },
 }));

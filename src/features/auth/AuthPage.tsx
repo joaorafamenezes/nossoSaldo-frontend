@@ -9,8 +9,9 @@ import { APP_NAME, APP_VERSION, ALLOW_ACCOUNT_CREATION } from '../../config/appM
 import { DevEnvironmentBanner } from '../../components/common/DevEnvironmentBanner';
 
 export function AuthPage() {
-  const { login, register, requestPasswordReset, isLoading, error } = useAuthStore();
+  const { login, register, requestPasswordReset } = useAuthStore();
   const [mode, setMode] = React.useState<'login' | 'register' | 'forgot'>('login');
+  const [isSubmitting, setIsSubmitting] = React.useState(false);
 
   const [email, setEmail] = React.useState('');
   const [senha, setSenha] = React.useState('');
@@ -18,6 +19,8 @@ export function AuthPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+    setIsSubmitting(true);
     try {
       if (mode === 'login') {
         await login({ email, senha });
@@ -38,6 +41,8 @@ export function AuthPage() {
       }
     } catch (err: any) {
       toast.error(err.message || 'Ocorreu um erro.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -139,6 +144,7 @@ export function AuthPage() {
               onChange={(e) => setEmail(e.target.value)}
               icon={<Mail className="h-4 w-4" />}
               required
+              autoComplete="email"
             />
 
             {mode !== 'forgot' && (
@@ -150,6 +156,7 @@ export function AuthPage() {
                 onChange={(e) => setSenha(e.target.value)}
                 icon={<Lock className="h-4 w-4" />}
                 required
+                autoComplete="current-password"
               />
             )}
 
@@ -180,7 +187,7 @@ export function AuthPage() {
             <Button
               type="submit"
               variant="primary"
-              isLoading={isLoading}
+              isLoading={isSubmitting}
               className="w-full shadow-glow-emerald text-sm font-bold"
             >
               {mode === 'login' && 'Acessar Plataforma'}
