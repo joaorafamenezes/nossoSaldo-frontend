@@ -35,6 +35,7 @@ export function CategoriesPage() {
     customStartDate,
     customEndDate,
     deleteCategory,
+    openNewExpense,
   } = useAppStore();
 
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -113,18 +114,30 @@ export function CategoriesPage() {
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => {
-            setCategoryToEdit(null);
-            setIsModalOpen(true);
-          }}
-          className="text-xs font-bold shadow-glow-emerald"
-        >
-          <PlusCircle className="h-3.5 w-3.5 mr-1" />
-          <span>Nova Categoria</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => openNewExpense()}
+            className="text-xs font-semibold border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
+          >
+            <PlusCircle className="h-3.5 w-3.5 mr-1" />
+            <span>Novo Lançamento</span>
+          </Button>
+
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setCategoryToEdit(null);
+              setIsModalOpen(true);
+            }}
+            className="text-xs font-bold shadow-glow-emerald"
+          >
+            <PlusCircle className="h-3.5 w-3.5 mr-1" />
+            <span>Nova Categoria</span>
+          </Button>
+        </div>
       </div>
 
       {/* Overview Stats */}

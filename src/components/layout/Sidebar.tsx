@@ -15,7 +15,9 @@ import {
   Wallet,
   Settings,
   Shield,
+  PlusCircle,
 } from 'lucide-react';
+import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 import { APP_NAME, APP_VERSION } from '../../config/appMeta';
 import { UserSettingsModal } from '../../features/auth/UserSettingsModal';
@@ -28,7 +30,7 @@ interface NavItem {
 }
 
 export function Sidebar() {
-  const { activeTab, setActiveTab, groceryItems } = useAppStore();
+  const { activeTab, setActiveTab, groceryItems, openNewExpense } = useAppStore();
   const { user, logout } = useAuthStore();
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = React.useState(false);
@@ -83,8 +85,25 @@ export function Sidebar() {
           </button>
         </div>
 
+        {/* Quick Action: Novo Lançamento */}
+        <div className="px-3 pt-3">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => openNewExpense()}
+            className={cn(
+              'w-full justify-center font-bold shadow-glow-emerald text-xs py-2.5',
+              isCollapsed && 'px-0'
+            )}
+            title="Novo Lançamento"
+          >
+            <PlusCircle className="h-4 w-4 shrink-0" />
+            {!isCollapsed && <span className="ml-2">Novo Lançamento</span>}
+          </Button>
+        </div>
+
         {/* Navigation Items */}
-        <nav className="space-y-1.5 p-3 mt-2">
+        <nav className="space-y-1.5 p-3 mt-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.tab;

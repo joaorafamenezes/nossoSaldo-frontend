@@ -33,7 +33,7 @@ export function AiPage() {
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
 
   React.useEffect(() => {
-    chatScrollRef.current?.scrollTo({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' });
+    chatScrollRef.current?.scrollTo?.({ top: chatScrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [aiMessages, isAiResponding]);
 
   const handleSend = async (e?: React.FormEvent | React.KeyboardEvent) => {

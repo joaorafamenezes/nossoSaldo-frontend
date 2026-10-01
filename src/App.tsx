@@ -11,6 +11,7 @@ import { CategoriesPage } from './features/categories/CategoriesPage';
 import { AiPage } from './features/ai-copilot/AiPage';
 import { JointAccountView } from './features/joint-account/JointAccountView';
 import { AiCopilotDrawer } from './features/ai-copilot/AiCopilotDrawer';
+import { ExpenseDrawerForm } from './features/expenses/ExpenseDrawerForm';
 
 export function App() {
   const { isAuthenticated, loadSession, token } = useAuthStore();
@@ -42,6 +43,9 @@ export function App() {
 
       {/* Floating Global Slide-over Copilot Drawer */}
       <AiCopilotDrawer />
+
+      {/* Global Expense Drawer Form (Acessível e funcional em qualquer aba) */}
+      <ExpenseDrawerForm />
     </AppShell>
   );
 }

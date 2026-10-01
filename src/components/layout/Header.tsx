@@ -78,7 +78,7 @@ export function Header() {
         <Button
           variant="primary"
           size="sm"
-          onClick={openNewExpense}
+          onClick={() => openNewExpense()}
           className="text-xs font-bold shadow-glow-emerald"
         >
           <PlusCircle className="h-3.5 w-3.5 mr-1" />

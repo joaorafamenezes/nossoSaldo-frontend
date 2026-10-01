@@ -179,7 +179,7 @@ export function CategoryExpensesModal({ isOpen, onClose, category }: CategoryExp
 
   const handleCreateNewInThisCategory = () => {
     onClose();
-    openNewExpense();
+    openNewExpense({ categoriaId: category.id });
   };
 
   return (

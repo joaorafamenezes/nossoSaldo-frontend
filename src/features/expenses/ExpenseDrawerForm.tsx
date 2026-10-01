@@ -15,6 +15,7 @@ export function ExpenseDrawerForm() {
     isExpenseDrawerOpen,
     closeExpenseDrawer,
     editingExpense,
+    newExpenseDefaults,
     addExpense,
     addInstallmentSeries,
     updateExpense,
@@ -57,19 +58,34 @@ export function ExpenseDrawerForm() {
       setObservacao(editingExpense.observacao || '');
     } else {
       const today = new Date().toISOString().split('T')[0];
+      const initialTipo = newExpenseDefaults?.tipo || 'despesa';
+      const initialCatId = newExpenseDefaults?.categoriaId || categories[0]?.id || '';
+      const initialCardId = newExpenseDefaults?.cartaoCreditoId || '';
+
       setDescricao('');
       setValor('');
-      setTipo('despesa');
-      setCategoriaId(categories[0]?.id || '');
-      setDataVencimento(today);
+      setTipo(initialTipo);
+      setCategoriaId(initialCatId);
       setOrigemLancamento('unico');
       setNumeroParcelas(1);
-      setCartaoCreditoId('');
+      setCartaoCreditoId(initialCardId);
       setNaoCompartilhar(false);
       setStatus('pendente');
       setObservacao('');
+
+      if (initialCardId) {
+        const card = cards.find((c) => c.id === initialCardId);
+        if (card) {
+          const autoDueDate = calculateCardDueDate(card, selectedCompetencia || today);
+          setDataVencimento(autoDueDate);
+        } else {
+          setDataVencimento(today);
+        }
+      } else {
+        setDataVencimento(today);
+      }
     }
-  }, [editingExpense, isExpenseDrawerOpen, categories]);
+  }, [editingExpense, isExpenseDrawerOpen, categories, cards, newExpenseDefaults, selectedCompetencia]);
 
   if (!isExpenseDrawerOpen) return null;
 

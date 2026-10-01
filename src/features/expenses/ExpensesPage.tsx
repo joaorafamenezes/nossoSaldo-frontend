@@ -4,7 +4,6 @@ import { ExpenseFilters, PeriodPreset, getDefaultFilters } from './ExpenseFilter
 import { ExpenseCategoryAccordion } from './ExpenseCategoryAccordion';
 import { ExpenseTable } from './ExpenseTable';
 import { ExpenseGrid } from './ExpenseGrid';
-import { ExpenseDrawerForm } from './ExpenseDrawerForm';
 import { BatchActionsBar } from './BatchActionsBar';
 import { ExpenseDeleteModal } from './ExpenseDeleteModal';
 import { Button } from '../../components/ui/Button';
@@ -236,7 +235,7 @@ export function ExpensesPage() {
         <Button
           variant="primary"
           size="sm"
-          onClick={openNewExpense}
+          onClick={() => openNewExpense()}
           className="text-xs font-bold shadow-glow-emerald"
         >
           <PlusCircle className="h-3.5 w-3.5 mr-1" />
@@ -418,9 +417,6 @@ export function ExpensesPage() {
           onBatchDelete={handleBatchDelete}
         />
       )}
-
-      {/* Drawer Form Modal */}
-      <ExpenseDrawerForm />
 
       {/* Batch Delete Confirmation Modal (oculto por enquanto) */}
       {ENABLE_BATCH_ACTIONS && (
