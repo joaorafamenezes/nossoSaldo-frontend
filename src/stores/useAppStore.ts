@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Gasto, Categoria, ResumoFinanceiro, StatusGasto } from '../types/financial';
+import { Gasto, Categoria, ResumoFinanceiro, StatusGasto, TipoGasto } from '../types/financial';
 import { CartaoCredito, FaturaCartao } from '../types/cards';
 import { SupermarketItem } from '../types/supermarket';
 import { AiInsight, AiMessage, AiExpenseDraft, IaConfiguracao } from '../types/ai';
@@ -52,7 +52,8 @@ interface AppState {
   // Modals & Drawers
   isExpenseDrawerOpen: boolean;
   editingExpense: Gasto | null;
-  openNewExpense: () => void;
+  newExpenseDefaults?: { categoriaId?: string; cartaoCreditoId?: string; tipo?: TipoGasto } | null;
+  openNewExpense: (defaults?: { categoriaId?: string; cartaoCreditoId?: string; tipo?: TipoGasto }) => void;
   openEditExpense: (expense: Gasto) => void;
   closeExpenseDrawer: () => void;
 
@@ -269,9 +270,10 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   isExpenseDrawerOpen: false,
   editingExpense: null,
-  openNewExpense: () => set({ isExpenseDrawerOpen: true, editingExpense: null }),
-  openEditExpense: (expense) => set({ isExpenseDrawerOpen: true, editingExpense: expense }),
-  closeExpenseDrawer: () => set({ isExpenseDrawerOpen: false, editingExpense: null }),
+  newExpenseDefaults: null,
+  openNewExpense: (defaults) => set({ isExpenseDrawerOpen: true, editingExpense: null, newExpenseDefaults: defaults || null }),
+  openEditExpense: (expense) => set({ isExpenseDrawerOpen: true, editingExpense: expense, newExpenseDefaults: null }),
+  closeExpenseDrawer: () => set({ isExpenseDrawerOpen: false, editingExpense: null, newExpenseDefaults: null }),
 
   isShoppingFocusMode: false,
   setShoppingFocusMode: (active) => set({ isShoppingFocusMode: active }),
@@ -1437,6 +1439,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       aiInsights: [],
       jointInfo: null,
       editingExpense: null,
+      newExpenseDefaults: null,
       isExpenseDrawerOpen: false,
       groceryItems: [],
     });

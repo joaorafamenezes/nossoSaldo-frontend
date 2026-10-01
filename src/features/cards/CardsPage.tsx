@@ -13,7 +13,7 @@ import { formatCurrency } from '../../lib/utils';
 import { toast } from 'sonner';
 
 export function CardsPage() {
-  const { cards, invoices, payInvoice, reopenInvoice, deleteCard } = useAppStore();
+  const { cards, invoices, payInvoice, reopenInvoice, deleteCard, openNewExpense } = useAppStore();
   const [cardsSortOrder, setCardsSortOrder] = React.useState<'asc' | 'desc'>('asc');
   const [selectedCardId, setSelectedCardId] = React.useState<string>(cards[0]?.id || '');
   const [activeInvoice, setActiveInvoice] = React.useState<FaturaCartao | null>(null);
@@ -68,18 +68,30 @@ export function CardsPage() {
           </p>
         </div>
 
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={() => {
-            setCardToEdit(null);
-            setIsNewCardModalOpen(true);
-          }}
-          className="text-xs shadow-glow-emerald"
-        >
-          <PlusCircle className="h-3.5 w-3.5 mr-1" />
-          <span>Cadastrar Novo Cartão</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => openNewExpense(selectedCard ? { cartaoCreditoId: selectedCard.id } : undefined)}
+            className="text-xs border-emerald-500/30 text-emerald-300 hover:bg-emerald-500/10"
+          >
+            <PlusCircle className="h-3.5 w-3.5 mr-1" />
+            <span>Novo Lançamento no Cartão</span>
+          </Button>
+
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => {
+              setCardToEdit(null);
+              setIsNewCardModalOpen(true);
+            }}
+            className="text-xs shadow-glow-emerald"
+          >
+            <PlusCircle className="h-3.5 w-3.5 mr-1" />
+            <span>Cadastrar Novo Cartão</span>
+          </Button>
+        </div>
       </div>
 
       {/* Intelligent Best Card Advisor */}

@@ -15,7 +15,9 @@ import {
   Receipt,
   Users2,
   Sparkles,
+  PlusCircle,
 } from 'lucide-react';
+import { Button } from '../../components/ui/Button';
 import { getCompetenciaDisplay, formatDate, isDevEnvironment } from '../../lib/utils';
 
 export function DashboardOverview() {
@@ -26,6 +28,7 @@ export function DashboardOverview() {
     customStartDate,
     customEndDate,
     jointInfo,
+    openNewExpense,
   } = useAppStore();
   const resumo = getResumoCompetencia();
 
@@ -37,7 +40,7 @@ export function DashboardOverview() {
   return (
     <div className="space-y-6">
       {/* Top Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-zinc-100">
             Painel Financeiro 360°
@@ -47,13 +50,25 @@ export function DashboardOverview() {
           </p>
         </div>
 
-        {/* Joint Account Partner Indicator */}
-        <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-300">
-          <Users2 className="h-4 w-4 text-emerald-400" />
-          <span>Conta: <strong>{jointInfo?.nomeConta || 'Gestão Individual'}</strong></span>
-          {jointInfo && (
-            <span className="text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400 font-mono">50/50</span>
-          )}
+        <div className="flex items-center gap-3">
+          {/* Joint Account Partner Indicator */}
+          <div className="flex items-center gap-2 rounded-xl border border-zinc-800 bg-zinc-900/60 px-3 py-1.5 text-xs text-zinc-300">
+            <Users2 className="h-4 w-4 text-emerald-400" />
+            <span>Conta: <strong>{jointInfo?.nomeConta || 'Gestão Individual'}</strong></span>
+            {jointInfo && (
+              <span className="text-[10px] bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400 font-mono">50/50</span>
+            )}
+          </div>
+
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => openNewExpense()}
+            className="text-xs font-semibold shadow-glow-emerald"
+          >
+            <PlusCircle className="h-3.5 w-3.5 mr-1" />
+            <span>Novo Lançamento</span>
+          </Button>
         </div>
       </div>
 

@@ -61,6 +61,11 @@ Quando `VITE_API_URL` nao e informado, o frontend usa a configuracao padrao defi
   - O gráfico de fluxo de caixa consolida receitas e despesas acumuladas ao longo da competência utilizando `getExpensesForCompetence`, garantindo que salários e receitas recorrentes contínuas (mesmo criadas em meses anteriores) e parcelamentos a receber sejam plenamente contabilizados.
   - A data de ocorrência efetiva (`getEffectiveExpenseDueDate` e `resolveFaturaDueDate`) e os valores individuais de parcelas e recorrências (`getEffectiveExpenseValue`) regem o momento exato em que o recurso entra ou sai do fluxo.
   - O horizonte de marcos cobre desde o início até o último dia do mês (dias 5, 10, 15, 20, 25 e o último dia do mês vigente: 28, 29, 30 ou 31), eliminando truncamentos que ocultavam receitas nos dias 29 a 31, com suporte responsivo a quinzenas e períodos personalizados.
+- **Novo Lançamento Global em Qualquer Tela (`CT001`)**:
+  - O modal/drawer de criação e edição de lançamentos (`ExpenseDrawerForm`) foi desacoplado e elevado para o nível raiz da aplicação (`App.tsx`), tornando-o globalmente disponível independentemente da tela ativa em que o usuário esteja navegando.
+  - O usuário pode realizar novos lançamentos diretamente a partir do **Dashboard 360°**, **Categorias**, **Cartões & Faturas**, **Copilot com IA**, **Conta Conjunta** ou **Mercado**, sem a necessidade de interromper sua atividade para navegar até a aba de Gastos.
+  - Pontos de acesso universais foram disponibilizados no cabeçalho global (`Header`), na barra lateral desktop (`Sidebar`), na paleta de comandos (`⌘K` / `CommandMenu`), no topo do Dashboard, na gestão de Categorias (com pré-seleção inteligente) e em Cartões (com pré-seleção e cálculo automático do vencimento da fatura).
+  - Ao salvar o lançamento, a mutação persiste no banco de dados através da API, atualiza o cache e a store global em tempo real e mantém o usuário na tela atual com todos os indicadores e métricas atualizados instantaneamente.
 
 ## Desenvolvimento local
 
