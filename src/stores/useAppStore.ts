@@ -327,14 +327,18 @@ export const useAppStore = create<AppState>((set, get) => ({
           : Array.isArray((catsRes.value as any)?.data)
           ? (catsRes.value as any).data
           : [];
-        categories = catData.map((c: any) => ({
-          ...c,
-          iconName: c.iconName || '🏷️',
-          cor: c.cor || c.color || '#10b981',
-          color: c.cor || c.color || '#10b981',
-          teto: c.teto !== undefined && c.teto !== null ? Number(c.teto) : null,
-          orcamentoMensal: c.teto !== undefined && c.teto !== null ? Number(c.teto) : null,
-        }));
+        categories = catData
+          .map((c: any) => ({
+            ...c,
+            iconName: c.iconName || '🏷️',
+            cor: c.cor || c.color || '#10b981',
+            color: c.cor || c.color || '#10b981',
+            teto: c.teto !== undefined && c.teto !== null ? Number(c.teto) : null,
+            orcamentoMensal: c.teto !== undefined && c.teto !== null ? Number(c.teto) : null,
+          }))
+          .sort((a: any, b: any) =>
+            (a.descricao || '').localeCompare(b.descricao || '', 'pt-BR', { sensitivity: 'base' })
+          );
       }
       set({ categories });
 
@@ -563,6 +567,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
       if (expenseData.cartaoCreditoId) {
         payload.cartaoCreditoId = expenseData.cartaoCreditoId;
+      }
+      if (expenseData.dataInicioRecorrencia) {
+        payload.dataInicioRecorrencia = new Date(expenseData.dataInicioRecorrencia).toISOString();
+      }
+      if (expenseData.dataFimRecorrencia) {
+        payload.dataFimRecorrencia = new Date(expenseData.dataFimRecorrencia).toISOString();
       }
 
       const created = await api.createExpense(token, payload);

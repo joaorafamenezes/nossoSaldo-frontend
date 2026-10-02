@@ -257,11 +257,10 @@ export function ExpenseFilters({
           <button
             type="button"
             onClick={handleSaveAllAsDefault}
-            className={`h-10 px-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1 shrink-0 ${
-              isCurrentSavedAsDefault
+            className={`h-10 px-2.5 rounded-xl border text-xs font-semibold transition-all flex items-center gap-1 shrink-0 ${isCurrentSavedAsDefault
                 ? 'border-amber-500/40 bg-amber-500/10 text-amber-500 dark:text-amber-400 shadow-xs'
                 : 'border-slate-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 text-slate-400 dark:text-zinc-500 hover:text-amber-500 hover:border-amber-500/30'
-            }`}
+              }`}
             title={
               isCurrentSavedAsDefault
                 ? 'Filtros atuais estão salvos como padrão inicial'
@@ -279,11 +278,10 @@ export function ExpenseFilters({
         <div className="flex rounded-xl border border-slate-200 dark:border-zinc-800 bg-slate-100 dark:bg-zinc-950 p-1 shrink-0">
           <button
             onClick={() => onViewModeChange('category')}
-            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
-              viewMode === 'category'
+            className={`flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${viewMode === 'category'
                 ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-zinc-200'
-            }`}
+              }`}
             title="Agrupar por Categoria (Accordion)"
           >
             <Layers className="h-3.5 w-3.5" />
@@ -291,18 +289,16 @@ export function ExpenseFilters({
           </button>
           <button
             onClick={() => onViewModeChange('table')}
-            className={`rounded-lg p-1.5 transition-colors ${
-              viewMode === 'table' ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-500 dark:hover:text-zinc-300'
-            }`}
+            className={`rounded-lg p-1.5 transition-colors ${viewMode === 'table' ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-500 dark:hover:text-zinc-300'
+              }`}
             title="Visualização em Tabela"
           >
             <TableIcon className="h-4 w-4" />
           </button>
           <button
             onClick={() => onViewModeChange('grid')}
-            className={`rounded-lg p-1.5 transition-colors ${
-              viewMode === 'grid' ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-500 dark:hover:text-zinc-300'
-            }`}
+            className={`rounded-lg p-1.5 transition-colors ${viewMode === 'grid' ? 'bg-white dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 shadow-xs' : 'text-slate-500 hover:text-slate-800 dark:text-zinc-500 dark:hover:text-zinc-300'
+              }`}
             title="Visualização em Grade"
           >
             <LayoutGrid className="h-4 w-4" />
@@ -346,11 +342,10 @@ export function ExpenseFilters({
             <button
               type="button"
               onClick={() => handlePresetSelect('all')}
-              className={`px-3 py-1 rounded-xl font-semibold text-xs transition-all ${
-                periodPreset === 'all' && !startDate && !endDate
+              className={`px-3 py-1 rounded-xl font-semibold text-xs transition-all ${periodPreset === 'all' && !startDate && !endDate
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-white dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60'
-              }`}
+                }`}
             >
               Mês Completo
             </button>
@@ -358,11 +353,10 @@ export function ExpenseFilters({
             <button
               type="button"
               onClick={() => handlePresetSelect('first_half')}
-              className={`px-3 py-1 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 ${
-                periodPreset === 'first_half'
+              className={`px-3 py-1 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 ${periodPreset === 'first_half'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-white dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60'
-              }`}
+                }`}
               title="Gastos a pagar no início do mês (dias 01 a 14)"
             >
               <span>🌓 1ª Quinzena</span>
@@ -372,11 +366,10 @@ export function ExpenseFilters({
             <button
               type="button"
               onClick={() => handlePresetSelect('second_half')}
-              className={`px-3 py-1 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 ${
-                periodPreset === 'second_half'
+              className={`px-3 py-1 rounded-xl font-semibold text-xs transition-all flex items-center gap-1.5 ${periodPreset === 'second_half'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-white dark:bg-zinc-800/80 text-slate-700 dark:text-zinc-300 hover:bg-slate-100 dark:hover:bg-zinc-800 border border-slate-200 dark:border-zinc-700/60'
-              }`}
+                }`}
               title={`Gastos a pagar no final do mês (dias 15 a ${lastDay})`}
             >
               <span>🌔 2ª Quinzena</span>
