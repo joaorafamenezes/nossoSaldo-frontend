@@ -198,4 +198,31 @@ describe('US - Novo Lançamento em Qualquer Tela (CT001)', () => {
       expect(screen.getByRole('heading', { name: /novo lançamento/i })).toBeInTheDocument();
     });
   });
+
+  it('CT001.6: Exibe categorias em ordem alfabética no select do Novo Lançamento', async () => {
+    useAppStore.setState({
+      activeTab: 'dashboard',
+      isExpenseDrawerOpen: true,
+      categories: [
+        { id: 'cat-supermercado', descricao: 'Supermercado', iconName: '🛒' },
+        { id: 'cat-academia', descricao: 'Academia', iconName: '🏋️' },
+        { id: 'cat-cinema', descricao: 'Cinema', iconName: '🎬' },
+        { id: 'cat-aluguel', descricao: 'Aluguel', iconName: '🏠' },
+      ],
+    });
+    render(<App />);
+
+    await waitFor(() => {
+      const selectCat = screen.getByLabelText(/Categoria/i) as HTMLSelectElement;
+      expect(selectCat).toBeInTheDocument();
+
+      const options = Array.from(selectCat.options).map((opt) => opt.text.trim());
+      expect(options).toEqual([
+        '🏋️ Academia',
+        '🏠 Aluguel',
+        '🎬 Cinema',
+        '🛒 Supermercado',
+      ]);
+    });
+  });
 });

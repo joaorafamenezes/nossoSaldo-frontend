@@ -42,6 +42,13 @@ export function ExpenseDrawerForm() {
   const [naoCompartilhar, setNaoCompartilhar] = React.useState(false);
   const [status, setStatus] = React.useState<StatusGasto>('pendente');
   const [observacao, setObservacao] = React.useState('');
+  const [dataFimRecorrencia, setDataFimRecorrencia] = React.useState('');
+
+  const sortedCategories = React.useMemo(() => {
+    return [...categories].sort((a, b) =>
+      (a.descricao || '').localeCompare(b.descricao || '', 'pt-BR', { sensitivity: 'base' })
+    );
+  }, [categories]);
 
   React.useEffect(() => {
     if (editingExpense) {
@@ -56,6 +63,7 @@ export function ExpenseDrawerForm() {
       setNaoCompartilhar(editingExpense.naoCompartilhar);
       setStatus(editingExpense.status);
       setObservacao(editingExpense.observacao || '');
+      setDataFimRecorrencia(editingExpense.dataFimRecorrencia ? editingExpense.dataFimRecorrencia.split('T')[0] : '');
     } else {
       const today = new Date().toISOString().split('T')[0];
       const initialTipo = newExpenseDefaults?.tipo || 'despesa';
@@ -72,6 +80,7 @@ export function ExpenseDrawerForm() {
       setNaoCompartilhar(false);
       setStatus('pendente');
       setObservacao('');
+      setDataFimRecorrencia('');
 
       if (initialCardId) {
         const card = cards.find((c) => c.id === initialCardId);
@@ -169,7 +178,7 @@ export function ExpenseDrawerForm() {
       cartaoCreditoId: cartaoCreditoId || undefined,
       cartaoNome: matchedCard?.descricao,
       dataInicioRecorrencia: origemLancamento === 'recorrente' ? dueDate : undefined,
-      dataFimRecorrencia: undefined,
+      dataFimRecorrencia: (origemLancamento === 'recorrente' && dataFimRecorrencia) ? dataFimRecorrencia : undefined,
       observacao: observacao.trim() ? observacao.trim() : (editingExpense ? '' : undefined),
     };
 
@@ -356,7 +365,7 @@ export function ExpenseDrawerForm() {
                 onChange={(e) => setCategoriaId(e.target.value)}
                 className="flex h-10 w-full rounded-xl border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100 outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
               >
-                {categories.map((cat) => (
+                {sortedCategories.map((cat) => (
                   <option key={cat.id} value={cat.id}>
                     {cat.iconName ? `${cat.iconName} ` : ''}{cat.descricao}
                   </option>
@@ -464,14 +473,32 @@ export function ExpenseDrawerForm() {
               )}
 
               {origemLancamento === 'recorrente' && (
-                <div className="pt-2.5 space-y-1 border-t border-zinc-800/80 animate-in fade-in duration-150">
+                <div className="pt-2.5 space-y-2.5 border-t border-zinc-800/80 animate-in fade-in duration-150">
                   <div className="flex items-center gap-1.5 text-xs text-amber-400 font-semibold">
                     <Sparkles className="h-3.5 w-3.5" />
                     <span>Recorrência Contínua Automática</span>
                   </div>
                   <p className="text-[11px] text-zinc-400 leading-relaxed">
-                    Este lançamento será projetado automaticamente todo mês a partir do dia de vencimento ({dataVencimento ? `${dataVencimento.split('-')[2]}` : 'selecionado'}), sem data de término. Não será necessário recadastrar todo mês.
+                    Este lançamento será projetado automaticamente todo mês a partir do dia {dataVencimento ? `${dataVencimento.split('-')[2]}` : 'selecionado'}.
                   </p>
+                  <div className="pt-1 space-y-1">
+                    <label htmlFor="dataFimRecorrencia" className="text-xs font-semibold text-zinc-300 block">
+                      Data de Término <span className="text-zinc-500 font-normal">(Opcional)</span>
+                    </label>
+                    <input
+                      id="dataFimRecorrencia"
+                      type="date"
+                      value={dataFimRecorrencia}
+                      onChange={(e) => setDataFimRecorrencia(e.target.value)}
+                      min={dataVencimento || undefined}
+                      className="h-9 w-full rounded-lg border border-zinc-800 bg-zinc-950 px-3 text-xs text-zinc-100 outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                    <p className="text-[11px] text-zinc-400">
+                      {dataFimRecorrencia
+                        ? `O lançamento será encerrado em ${formatDate(dataFimRecorrencia)}.`
+                        : 'Deixe em branco para assinaturas contínuas (ex: PSN, Netflix, academia). Será renovado automaticamente.'}
+                    </p>
+                  </div>
                 </div>
               )}
             </div>
