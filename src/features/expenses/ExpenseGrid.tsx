@@ -276,27 +276,51 @@ export function ExpenseGrid({
                           }`}
                         >
                           <div className="min-w-0 pr-1">
-                            <span className="font-bold font-mono text-[11px] text-zinc-200">
-                              {inst.numeroParcela}/{expense.numeroParcelas} - {formatCurrency(inst.valorParcela)}
-                            </span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-bold font-mono text-[11px] text-zinc-200">
+                                {inst.numeroParcela}/{expense.numeroParcelas} - {formatCurrency(inst.valorParcela)}
+                              </span>
+                              {inst.faturaCartaoId || (inst.faturaCartaoId === undefined && expense.cartaoCreditoId) ? (
+                                <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                  💳 Cartão
+                                </span>
+                              ) : (
+                                <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                  🏦 C. Corrente
+                                </span>
+                              )}
+                            </div>
                             <span className="text-[10px] text-zinc-400 block font-mono">
                               {formatDate(inst.dataVencimentoParcela)}
                             </span>
                           </div>
-                          <Button
-                            size="sm"
-                            variant={isInstPaid ? 'secondary' : 'primary'}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setStatusExpenseToConfirm(expense);
-                              setStatusInstallmentToConfirm(inst);
-                            }}
-                            className={`text-[10px] px-2 py-0.5 h-6 rounded ${
-                              isInstPaid ? 'bg-zinc-800 text-zinc-300' : 'bg-emerald-600 text-white'
-                            }`}
-                          >
-                            {isInstPaid ? 'Reabrir' : 'Pagar'}
-                          </Button>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditExpense(expense, inst);
+                              }}
+                              title={`Editar forma de pagamento / parcela ${inst.numeroParcela}`}
+                              className="rounded p-1 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors"
+                            >
+                              <Edit3 className="h-3 w-3" />
+                            </button>
+                            <Button
+                              size="sm"
+                              variant={isInstPaid ? 'secondary' : 'primary'}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setStatusExpenseToConfirm(expense);
+                                setStatusInstallmentToConfirm(inst);
+                              }}
+                              className={`text-[10px] px-2 py-0.5 h-6 rounded ${
+                                isInstPaid ? 'bg-zinc-800 text-zinc-300' : 'bg-emerald-600 text-white'
+                              }`}
+                            >
+                              {isInstPaid ? 'Reabrir' : 'Pagar'}
+                            </Button>
+                          </div>
                         </div>
                       );
                     })}

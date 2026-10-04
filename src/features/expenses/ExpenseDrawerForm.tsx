@@ -4,6 +4,7 @@ import { useAuthStore } from '../../stores/useAuthStore';
 import { TipoGasto, OrigemLancamento, StatusGasto, Gasto } from '../../types/financial';
 import { CategoryModal } from '../categories/CategoryModal';
 import { RecurringScopeModal, RecurringEditScope } from './RecurringScopeModal';
+import { PaymentMethodChangeModal } from './PaymentMethodChangeModal';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { X, Sparkles, Plus, Calendar, CreditCard, Tag, User, Layers, CheckCircle2, Clock } from 'lucide-react';
@@ -15,6 +16,7 @@ export function ExpenseDrawerForm() {
     isExpenseDrawerOpen,
     closeExpenseDrawer,
     editingExpense,
+    editingInstallment,
     newExpenseDefaults,
     addExpense,
     addInstallmentSeries,
@@ -29,7 +31,11 @@ export function ExpenseDrawerForm() {
 
   const [isCategoryModalOpen, setIsCategoryModalOpen] = React.useState(false);
   const [isScopeModalOpen, setIsScopeModalOpen] = React.useState(false);
+  const [isPaymentMethodModalOpen, setIsPaymentMethodModalOpen] = React.useState(false);
+  const [paymentMethodModalMode, setPaymentMethodModalMode] = React.useState<'parcelado' | 'recorrente'>('parcelado');
   const [pendingRecurringPayload, setPendingRecurringPayload] = React.useState<any | null>(null);
+  const [pendingParceladoPayload, setPendingParceladoPayload] = React.useState<any | null>(null);
+  const [initialCardIdOnOpen, setInitialCardIdOnOpen] = React.useState<string>('');
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const [descricao, setDescricao] = React.useState('');
   const [valor, setValor] = React.useState('');
@@ -53,17 +59,29 @@ export function ExpenseDrawerForm() {
   React.useEffect(() => {
     if (editingExpense) {
       setDescricao(editingExpense.descricao);
-      setValor(editingExpense.valor.toString());
       setTipo(editingExpense.tipo);
       setCategoriaId(editingExpense.categoriaId);
-      setDataVencimento(editingExpense.dataVencimento);
       setOrigemLancamento(editingExpense.origemLancamento);
       setNumeroParcelas(editingExpense.numeroParcelas || 1);
-      setCartaoCreditoId(editingExpense.cartaoCreditoId || '');
       setNaoCompartilhar(editingExpense.naoCompartilhar);
-      setStatus(editingExpense.status);
       setObservacao(editingExpense.observacao || '');
       setDataFimRecorrencia(editingExpense.dataFimRecorrencia ? editingExpense.dataFimRecorrencia.split('T')[0] : '');
+
+      if (editingInstallment) {
+        setValor(editingInstallment.valorParcela ? editingInstallment.valorParcela.toString() : (editingExpense.valor / (editingExpense.numeroParcelas || 1)).toString());
+        setDataVencimento(editingInstallment.dataVencimentoParcela || editingExpense.dataVencimento);
+        setStatus(editingInstallment.status || editingExpense.status);
+        const instCardId = editingInstallment.faturaCartaoId ? (editingExpense.cartaoCreditoId || '') : '';
+        setCartaoCreditoId(instCardId);
+        setInitialCardIdOnOpen(instCardId);
+      } else {
+        setValor(editingExpense.valor.toString());
+        setDataVencimento(editingExpense.dataVencimento);
+        setStatus(editingExpense.status);
+        const expCardId = editingExpense.cartaoCreditoId || '';
+        setCartaoCreditoId(expCardId);
+        setInitialCardIdOnOpen(expCardId);
+      }
     } else {
       const today = new Date().toISOString().split('T')[0];
       const initialTipo = newExpenseDefaults?.tipo || 'despesa';
@@ -77,6 +95,7 @@ export function ExpenseDrawerForm() {
       setOrigemLancamento('unico');
       setNumeroParcelas(1);
       setCartaoCreditoId(initialCardId);
+      setInitialCardIdOnOpen('');
       setNaoCompartilhar(false);
       setStatus('pendente');
       setObservacao('');
@@ -94,7 +113,7 @@ export function ExpenseDrawerForm() {
         setDataVencimento(today);
       }
     }
-  }, [editingExpense, isExpenseDrawerOpen, categories, cards, newExpenseDefaults, selectedCompetencia]);
+  }, [editingExpense, editingInstallment, isExpenseDrawerOpen, categories, cards, newExpenseDefaults, selectedCompetencia]);
 
   if (!isExpenseDrawerOpen) return null;
 
@@ -142,6 +161,84 @@ export function ExpenseDrawerForm() {
     }
   };
 
+  const handleConfirmPaymentMethodChange = async (atualizarTodos: boolean) => {
+    if (!editingExpense) return;
+
+    setIsSubmitting(true);
+    try {
+      if (paymentMethodModalMode === 'parcelado') {
+        const payload = pendingParceladoPayload || {
+          descricao,
+          tipo,
+          status,
+          origemLancamento,
+          numeroParcelas,
+          naoCompartilhar,
+          valor: parsedValor,
+          competencia: `${(dataVencimento || new Date().toISOString().split('T')[0]).substring(0, 7)}-01`,
+          dataVencimento,
+          categoriaId: categoriaId || categories[0]?.id,
+          cartaoCreditoId: cartaoCreditoId || undefined,
+          cartaoNome: matchedCard?.descricao,
+          observacao: observacao.trim() || undefined,
+        };
+
+        await updateExpense(editingExpense.id, {
+          ...payload,
+          atualizarTodasParcelas: atualizarTodos,
+          parcelaId: editingInstallment?.id,
+          numeroParcela: editingInstallment?.numeroParcela,
+          cartaoCreditoId: cartaoCreditoId || null,
+        });
+
+        if (atualizarTodos) {
+          toast.success('Todas as parcelas foram migradas para a forma de pagamento selecionada!');
+        } else {
+          toast.success('Parcela atualizada! As demais parcelas continuam no cartão de crédito.');
+        }
+      } else {
+        const payload = pendingRecurringPayload || {
+          descricao,
+          tipo,
+          status,
+          origemLancamento,
+          numeroParcelas: 1,
+          naoCompartilhar,
+          valor: parsedValor,
+          competencia: `${(dataVencimento || new Date().toISOString().split('T')[0]).substring(0, 7)}-01`,
+          dataVencimento,
+          categoriaId: categoriaId || categories[0]?.id,
+          cartaoCreditoId: cartaoCreditoId || null,
+          cartaoNome: matchedCard?.descricao,
+          observacao: observacao.trim() || undefined,
+        };
+
+        const scope: RecurringEditScope = atualizarTodos ? 'ALL_SERIES' : 'THIS_ONLY';
+        await updateExpense(editingExpense.id, {
+          ...payload,
+          escopoEdicao: scope,
+          targetCompetencia: selectedCompetencia,
+          cartaoCreditoId: cartaoCreditoId || null,
+        });
+
+        if (atualizarTodos) {
+          toast.success('Forma de pagamento atualizada para toda a série da recorrência!');
+        } else {
+          toast.success('Forma de pagamento atualizada somente para o mês selecionado!');
+        }
+      }
+
+      setIsPaymentMethodModalOpen(false);
+      setPendingParceladoPayload(null);
+      setPendingRecurringPayload(null);
+      closeExpenseDrawer();
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao atualizar forma de pagamento.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!descricao.trim() || parsedValor <= 0) {
@@ -175,15 +272,33 @@ export function ExpenseDrawerForm() {
       categoriaId: effectiveCategoriaId,
       responsavelId: user?.id || '',
       responsavelNome: user?.nome || 'Usuário',
-      cartaoCreditoId: cartaoCreditoId || undefined,
+      cartaoCreditoId: cartaoCreditoId || null,
       cartaoNome: matchedCard?.descricao,
       dataInicioRecorrencia: origemLancamento === 'recorrente' ? dueDate : undefined,
       dataFimRecorrencia: (origemLancamento === 'recorrente' && dataFimRecorrencia) ? dataFimRecorrencia : undefined,
       observacao: observacao.trim() ? observacao.trim() : (editingExpense ? '' : undefined),
     };
 
-    // Se estiver editando uma recorrência e mantendo ela como recorrente, abre o modal de escopo
+    // CT001: Se estiver editando um gasto parcelado e houve alteração na forma de pagamento (ex: cartão -> Conta Corrente ou troca de cartão)
+    if (editingExpense && editingExpense.origemLancamento === 'parcelado' && origemLancamento === 'parcelado') {
+      const hasCardChanged = (initialCardIdOnOpen || '') !== (cartaoCreditoId || '');
+      if (hasCardChanged) {
+        setPendingParceladoPayload(expensePayload);
+        setPaymentMethodModalMode('parcelado');
+        setIsPaymentMethodModalOpen(true);
+        return;
+      }
+    }
+
+    // CT002: Se estiver editando uma recorrência e mantendo ela como recorrente
     if (editingExpense && editingExpense.origemLancamento === 'recorrente' && origemLancamento === 'recorrente') {
+      const hasCardChanged = (initialCardIdOnOpen || '') !== (cartaoCreditoId || '');
+      if (hasCardChanged) {
+        setPendingRecurringPayload(expensePayload);
+        setPaymentMethodModalMode('recorrente');
+        setIsPaymentMethodModalOpen(true);
+        return;
+      }
       setPendingRecurringPayload(expensePayload);
       setIsScopeModalOpen(true);
       return;
@@ -192,8 +307,18 @@ export function ExpenseDrawerForm() {
     setIsSubmitting(true);
     try {
       if (editingExpense) {
-        await updateExpense(editingExpense.id, expensePayload);
-        toast.success('Lançamento atualizado com sucesso!');
+        if (editingInstallment) {
+          await updateExpense(editingExpense.id, {
+            ...expensePayload,
+            parcelaId: editingInstallment.id,
+            numeroParcela: editingInstallment.numeroParcela,
+            atualizarTodasParcelas: false,
+          });
+          toast.success(`Parcela ${editingInstallment.numeroParcela} atualizada com sucesso!`);
+        } else {
+          await updateExpense(editingExpense.id, expensePayload);
+          toast.success('Lançamento atualizado com sucesso!');
+        }
       } else {
         if (origemLancamento === 'parcelado' && numeroParcelas > 1) {
           await addInstallmentSeries(expensePayload, numeroParcelas, valorParcela);
@@ -237,10 +362,18 @@ export function ExpenseDrawerForm() {
           <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
             <div>
               <h3 className="text-lg font-bold text-zinc-100">
-                {editingExpense ? 'Editar Lançamento' : 'Novo Lançamento'}
+                {editingInstallment
+                  ? `Editar Parcela ${editingInstallment.numeroParcela}`
+                  : editingExpense
+                  ? 'Editar Lançamento'
+                  : 'Novo Lançamento'}
               </h3>
               <p className="text-xs text-zinc-400">
-                {editingExpense ? 'Atualize as informações contábeis' : 'Registre despesas ou receitas no NossoSaldo'}
+                {editingInstallment
+                  ? `Ajuste o vencimento, valor ou forma de pagamento da parcela ${editingInstallment.numeroParcela} de ${editingExpense?.numeroParcelas || '?'}`
+                  : editingExpense
+                  ? 'Atualize as informações contábeis'
+                  : 'Registre despesas ou receitas no NossoSaldo'}
               </p>
             </div>
             <button
@@ -250,6 +383,18 @@ export function ExpenseDrawerForm() {
               <X className="h-5 w-5" />
             </button>
           </div>
+
+          {editingInstallment && (
+            <div className="mt-4 p-3 rounded-xl bg-purple-950/20 border border-purple-800/40 text-xs text-purple-300 flex items-start gap-2.5">
+              <Layers className="h-4 w-4 shrink-0 text-purple-400 mt-0.5" />
+              <div>
+                <span className="font-bold">Editando Parcela Específica:</span>
+                <p className="text-zinc-300 mt-0.5">
+                  Você pode alterar a forma de pagamento (Cartão ou Conta Corrente) desta parcela. Ao salvar, você poderá escolher se atualiza apenas ela ou todas as demais.
+                </p>
+              </div>
+            </div>
+          )}
 
           <form id="expense-form" onSubmit={handleSubmit} className="space-y-4 mt-6">
             {/* Type selector */}
@@ -570,6 +715,24 @@ export function ExpenseDrawerForm() {
         onConfirm={handleConfirmScope}
         competencia={selectedCompetencia || (editingExpense?.competencia ? editingExpense.competencia.substring(0, 7) : '2026-09')}
         descricao={descricao}
+        isSubmitting={isSubmitting}
+      />
+
+      <PaymentMethodChangeModal
+        isOpen={isPaymentMethodModalOpen}
+        onClose={() => {
+          setIsPaymentMethodModalOpen(false);
+          setPendingParceladoPayload(null);
+          setPendingRecurringPayload(null);
+        }}
+        onConfirm={handleConfirmPaymentMethodChange}
+        mode={paymentMethodModalMode}
+        descricao={descricao}
+        origemNome={cards.find((c) => c.id === initialCardIdOnOpen)?.descricao || (initialCardIdOnOpen ? 'Cartão de Crédito' : 'Conta Corrente / PIX / Dinheiro')}
+        destinoNome={cartaoCreditoId ? (cards.find((c) => c.id === cartaoCreditoId)?.descricao || 'Cartão de Crédito') : 'Conta Corrente / PIX / Dinheiro'}
+        numeroParcela={editingInstallment?.numeroParcela}
+        totalParcelas={editingExpense?.numeroParcelas || editingExpense?.lancamentosBase?.length}
+        competencia={selectedCompetencia || (editingExpense?.competencia ? editingExpense.competencia.substring(0, 7) : '2026-09')}
         isSubmitting={isSubmitting}
       />
     </div>
