@@ -6,18 +6,21 @@ import { ExpenseDrawerForm } from './ExpenseDrawerForm';
 import { ExpenseTable } from './ExpenseTable';
 import { ExpenseGrid } from './ExpenseGrid';
 import { useAppStore } from '../../stores/useAppStore';
-import { Gasto, CartaoCredito, Categoria } from '../../types/financial';
+import { Gasto, Categoria } from '../../types/financial';
+import { CartaoCredito } from '../../types/cards';
 
 describe('Troca de Forma de Pagamento / Cartão de Crédito (CT001 & CT002)', () => {
   const mockCardNubank: CartaoCredito = {
     id: 'crd-nubank',
     descricao: 'Nubank Roxinho',
-    limite: 5000,
+    bandeira: 'mastercard',
+    corGradiente: 'from-purple-600 to-indigo-600',
+    valorLimite: 5000,
+    limiteDisponivel: 5000,
     diaFechamento: 5,
     diaVencimento: 12,
     ultimosDigitos: '1234',
     cor: 'purple',
-    ativo: true,
   };
 
   const mockCategory: Categoria = {
@@ -51,6 +54,7 @@ describe('Troca de Forma de Pagamento / Cartão de Crédito (CT001 & CT002)', ()
         {
           id: 'lb-1',
           gastoId: 'gst-parcelado-tv',
+          descricao: 'Smart TV 55 - Parcela 1/3',
           numeroParcela: 1,
           valorParcela: 1000,
           dataVencimentoParcela: '2026-09-12',
@@ -61,6 +65,7 @@ describe('Troca de Forma de Pagamento / Cartão de Crédito (CT001 & CT002)', ()
         {
           id: 'lb-2',
           gastoId: 'gst-parcelado-tv',
+          descricao: 'Smart TV 55 - Parcela 2/3',
           numeroParcela: 2,
           valorParcela: 1000,
           dataVencimentoParcela: '2026-10-12',
@@ -71,6 +76,7 @@ describe('Troca de Forma de Pagamento / Cartão de Crédito (CT001 & CT002)', ()
         {
           id: 'lb-3',
           gastoId: 'gst-parcelado-tv',
+          descricao: 'Smart TV 55 - Parcela 3/3',
           numeroParcela: 3,
           valorParcela: 1000,
           dataVencimentoParcela: '2026-11-12',
@@ -328,6 +334,7 @@ describe('Troca de Forma de Pagamento / Cartão de Crédito (CT001 & CT002)', ()
           {
             id: 'lb-1',
             gastoId: 'gst-mix',
+            descricao: 'Notebook Gamer - Parcela 1/2',
             numeroParcela: 1,
             valorParcela: 2000,
             dataVencimentoParcela: '2026-09-12',
@@ -338,6 +345,7 @@ describe('Troca de Forma de Pagamento / Cartão de Crédito (CT001 & CT002)', ()
           {
             id: 'lb-2',
             gastoId: 'gst-mix',
+            descricao: 'Notebook Gamer - Parcela 2/2',
             numeroParcela: 2,
             valorParcela: 2000,
             dataVencimentoParcela: '2026-10-12',
@@ -346,6 +354,8 @@ describe('Troca de Forma de Pagamento / Cartão de Crédito (CT001 & CT002)', ()
             faturaCartaoId: 'fat-2', // continua no cartão
           },
         ],
+        createdAt: '2026-09-01T10:00:00.000Z',
+        updatedAt: '2026-09-01T10:00:00.000Z',
       };
 
       useAppStore.setState({

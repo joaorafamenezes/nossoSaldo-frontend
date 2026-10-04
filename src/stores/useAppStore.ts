@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Gasto, Categoria, ResumoFinanceiro, StatusGasto, TipoGasto } from '../types/financial';
+import { Gasto, Categoria, ResumoFinanceiro, StatusGasto, TipoGasto, LancamentoBase } from '../types/financial';
 import { CartaoCredito, FaturaCartao } from '../types/cards';
 import { SupermarketItem } from '../types/supermarket';
 import { AiInsight, AiMessage, AiExpenseDraft, IaConfiguracao } from '../types/ai';
