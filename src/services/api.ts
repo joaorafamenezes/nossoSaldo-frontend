@@ -565,3 +565,28 @@ export async function updatePassword(token?: string, senha?: string, recoveryTok
 
   return parseResponse(response);
 }
+
+export async function getReleaseStatus(version: string, token: string) {
+  const response = await fetch(`${API_URL}/releases/status?version=${encodeURIComponent(version)}`, {
+    method: 'GET',
+    headers: {
+      'x-access-token': token,
+    },
+  });
+
+  return parseResponse(response);
+}
+
+export async function markReleaseAsViewed(versao: string, token: string) {
+  const response = await fetch(`${API_URL}/releases/mark-viewed`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+    body: JSON.stringify({ versao }),
+  });
+
+  return parseResponse(response);
+}
+
