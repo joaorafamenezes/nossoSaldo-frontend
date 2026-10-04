@@ -12,10 +12,13 @@ import { AiPage } from './features/ai-copilot/AiPage';
 import { JointAccountView } from './features/joint-account/JointAccountView';
 import { AiCopilotDrawer } from './features/ai-copilot/AiCopilotDrawer';
 import { ExpenseDrawerForm } from './features/expenses/ExpenseDrawerForm';
+import { useReleaseStore } from './stores/useReleaseStore';
+import { ReleaseNotesModal } from './components/common/ReleaseNotesModal';
 
 export function App() {
   const { isAuthenticated, loadSession, token } = useAuthStore();
   const { activeTab, loadApiData, selectedCompetencia } = useAppStore();
+  const { checkReleaseStatus } = useReleaseStore();
 
   React.useEffect(() => {
     loadSession();
@@ -24,8 +27,9 @@ export function App() {
   React.useEffect(() => {
     if (token) {
       loadApiData(token);
+      checkReleaseStatus(token);
     }
-  }, [token, selectedCompetencia, loadApiData]);
+  }, [token, selectedCompetencia, loadApiData, checkReleaseStatus]);
 
   if (!isAuthenticated) {
     return <AuthPage />;
@@ -46,6 +50,9 @@ export function App() {
 
       {/* Global Expense Drawer Form (Acessível e funcional em qualquer aba) */}
       <ExpenseDrawerForm />
+
+      {/* Global Release Notes / Novidades Modal */}
+      <ReleaseNotesModal />
     </AppShell>
   );
 }

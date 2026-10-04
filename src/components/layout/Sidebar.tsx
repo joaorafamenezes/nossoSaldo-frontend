@@ -21,6 +21,7 @@ import { Button } from '../ui/Button';
 import { cn } from '../../lib/utils';
 import { APP_NAME, APP_VERSION } from '../../config/appMeta';
 import { UserSettingsModal } from '../../features/auth/UserSettingsModal';
+import { useReleaseStore } from '../../stores/useReleaseStore';
 
 interface NavItem {
   tab: NavigationTab;
@@ -32,6 +33,7 @@ interface NavItem {
 export function Sidebar() {
   const { activeTab, setActiveTab, groceryItems, openNewExpense } = useAppStore();
   const { user, logout } = useAuthStore();
+  const { hasUnseenRelease, openReleaseNotes } = useReleaseStore();
   const [isCollapsed, setIsCollapsed] = React.useState(false);
   const [isUserSettingsOpen, setIsUserSettingsOpen] = React.useState(false);
 
@@ -69,9 +71,26 @@ export function Sidebar() {
                 <span className="font-bold tracking-tight text-slate-900 dark:text-zinc-100 text-base">
                   {APP_NAME}
                 </span>
-                <span className="text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold tracking-wider">
-                  v{APP_VERSION} PRO
-                </span>
+                <button
+                  type="button"
+                  onClick={() => openReleaseNotes()}
+                  className="group flex items-center gap-1.5 text-left text-[10px] font-mono text-emerald-600 dark:text-emerald-400 font-semibold tracking-wider hover:text-emerald-300 transition-colors cursor-pointer outline-none"
+                  title="Ver Novidades da Versão"
+                  aria-label="Ver Novidades da Versão"
+                >
+                  <span>v{APP_VERSION} PRO</span>
+                  {hasUnseenRelease && (
+                    <span className="relative flex h-2 w-2" data-testid="release-unseen-ping">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                    </span>
+                  )}
+                  {hasUnseenRelease && (
+                    <span className="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1 py-0.2 rounded font-bold">
+                      NOVO ✨
+                    </span>
+                  )}
+                </button>
               </div>
             )}
           </div>
