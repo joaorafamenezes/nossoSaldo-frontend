@@ -71,47 +71,79 @@ html.light {
   color-scheme: light;
 }
 
-html.light body,
-html.light .bg-zinc-950,
-html.light .bg-zinc-950\/80,
-html.light .bg-zinc-950\/90,
-html.light .bg-zinc-950\/70,
-html.light .bg-zinc-950\/60,
-html.light .bg-zinc-950\/40 {
+/* Page Root & Main Background */
+html.light body {
   background-color: #f8fafc !important; /* Slate 50 */
   color: #0f172a !important; /* Slate 900 */
 }
 
-html.light .bg-zinc-900,
-html.light .bg-zinc-900\/40,
-html.light .bg-zinc-900\/50,
-html.light .bg-zinc-900\/60,
-html.light .bg-zinc-900\/70,
-html.light .bg-zinc-900\/80,
-html.light .bg-zinc-900\/90 {
+/* Any bg-zinc-950 element (covers /50, /40, /60, /70, /80, /90) */
+html.light [class*="bg-zinc-950"] {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* Inner sub-boxes & cards using bg-zinc-950 */
+html.light .rounded-xl[class*="bg-zinc-950"],
+html.light .rounded-2xl[class*="bg-zinc-950"],
+html.light .rounded-lg[class*="bg-zinc-950"] {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+/* Dialogs and Modals using bg-zinc-950 */
+html.light [role="dialog"] [class*="bg-zinc-950"],
+html.light .fixed [class*="bg-zinc-950"].rounded-3xl,
+html.light .fixed [class*="bg-zinc-950"].rounded-2xl {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.06) !important;
+}
+
+/* Main Cards & Widgets (bg-zinc-900 and all opacities) */
+html.light [class*="bg-zinc-900"]:not([class*="bg-gradient-"]) {
   background-color: #ffffff !important;
   color: #0f172a !important;
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 1px 2px -1px rgba(15, 23, 42, 0.05);
 }
 
-html.light .bg-zinc-800,
-html.light .bg-zinc-800\/60,
-html.light .bg-zinc-800\/80,
-html.light .bg-zinc-800\/90 {
+/* Sub-surfaces, Pills, Badges & Secondary Elements (bg-zinc-800) */
+html.light [class*="bg-zinc-800"]:not([class*="bg-gradient-"]) {
   background-color: #f1f5f9 !important; /* Slate 100 */
-  color: #1e293b !important;
+  color: #1e293b !important; /* Slate 800 */
+  border-color: #e2e8f0 !important;
 }
 
-html.light .border-zinc-800,
-html.light .border-zinc-800\/80,
-html.light .border-zinc-800\/60,
-html.light .border-zinc-800\/90,
-html.light .border-zinc-700,
-html.light .border-zinc-700\/60,
-html.light .border-zinc-700\/80 {
+/* Active tabs / buttons using bg-zinc-800 with text-white */
+html.light .bg-zinc-800.text-white,
+html.light [class*="bg-zinc-800"].text-white,
+html.light .bg-zinc-800 .text-white {
+  color: #0f172a !important;
+  background-color: #e2e8f0 !important;
+}
+
+/* Progress bar background tracks */
+html.light .overflow-hidden > [class*="bg-zinc-800"],
+html.light [class*="bg-zinc-800"].h-2,
+html.light [class*="bg-zinc-800"].h-1\.5,
+html.light [class*="bg-zinc-800"].rounded-full {
+  background-color: #e2e8f0 !important; /* Slate 200 */
+}
+
+/* All Borders & Dividers */
+html.light [class*="border-zinc-800"],
+html.light [class*="border-zinc-700"] {
   border-color: #e2e8f0 !important; /* Slate 200 */
 }
 
+html.light [class*="divide-zinc-800"] > * + *,
+html.light [class*="divide-zinc-700"] > * + * {
+  border-color: #e2e8f0 !important;
+}
+
+/* --- High-Contrast Text Hierarchy --- */
 html.light .text-zinc-100,
 html.light .text-zinc-200 {
   color: #0f172a !important; /* Slate 900 */
@@ -122,55 +154,191 @@ html.light .text-zinc-300 {
 }
 
 html.light .text-zinc-400 {
-  color: #64748b !important; /* Slate 500 */
+  color: #475569 !important; /* Slate 600 - crisp, easy to read */
 }
 
 html.light .text-zinc-500 {
-  color: #94a3b8 !important; /* Slate 400 */
+  color: #64748b !important; /* Slate 500 - WCAG AA compliant */
 }
 
+html.light .text-slate-400 {
+  color: #64748b !important;
+}
+
+/* --- Semantic Status Colors (Vibrant & High Contrast) --- */
+/* Positive / Receitas / Green */
+html.light .text-emerald-400 {
+  color: #059669 !important; /* Emerald 600 */
+}
+html.light .text-emerald-300 {
+  color: #047857 !important; /* Emerald 700 */
+}
+html.light .text-emerald-500 {
+  color: #059669 !important;
+}
+html.light [class*="bg-emerald-500/"],
+html.light [class*="bg-emerald-950/"] {
+  background-color: #ecfdf5 !important; /* Emerald 50 */
+}
+html.light [class*="border-emerald-500/"] {
+  border-color: #a7f3d0 !important; /* Emerald 200 */
+}
+
+/* Negative / Despesas / Atrasado / Rose */
+html.light .text-rose-400 {
+  color: #e11d48 !important; /* Rose 600 */
+}
+html.light .text-rose-300 {
+  color: #be123c !important; /* Rose 700 */
+}
+html.light .text-rose-500 {
+  color: #e11d48 !important;
+}
+html.light [class*="bg-rose-500/"],
+html.light [class*="bg-rose-950/"] {
+  background-color: #fff1f2 !important; /* Rose 50 */
+}
+html.light [class*="border-rose-500/"] {
+  border-color: #fecdd3 !important; /* Rose 200 */
+}
+
+/* Warnings / Alertas / Amber / Orange */
+html.light .text-amber-400,
+html.light .text-amber-300,
+html.light .text-yellow-400,
+html.light .text-yellow-300 {
+  color: #b45309 !important; /* Amber 700 */
+}
+html.light .text-orange-400,
+html.light .text-orange-300 {
+  color: #c2410c !important; /* Orange 700 */
+}
+html.light [class*="bg-amber-400/"],
+html.light [class*="bg-amber-500/"],
+html.light [class*="bg-amber-950/"] {
+  background-color: #fffbeb !important; /* Amber 50 */
+}
+html.light [class*="border-amber-400/"],
+html.light [class*="border-amber-500/"] {
+  border-color: #fde68a !important; /* Amber 200 */
+}
+html.light [class*="bg-orange-500/"],
+html.light [class*="bg-orange-950/"] {
+  background-color: #fff7ed !important; /* Orange 50 */
+}
+html.light [class*="border-orange-500/"] {
+  border-color: #fed7aa !important; /* Orange 200 */
+}
+
+/* Info / Blue / Indigo / Purple */
+html.light .text-blue-400 {
+  color: #1d4ed8 !important; /* Blue 700 */
+}
+html.light .text-indigo-400 {
+  color: #4f46e5 !important; /* Indigo 600 */
+}
+html.light .text-purple-400 {
+  color: #7c3aed !important; /* Purple 600 */
+}
+html.light [class*="bg-blue-500/"],
+html.light [class*="bg-blue-950/"] {
+  background-color: #eff6ff !important;
+}
+html.light [class*="border-blue-500/"] {
+  border-color: #bfdbfe !important;
+}
+html.light [class*="bg-indigo-500/"],
+html.light [class*="bg-indigo-950/"] {
+  background-color: #eef2ff !important;
+}
+html.light [class*="border-indigo-500/"] {
+  border-color: #c7d2fe !important;
+}
+html.light [class*="bg-purple-500/"],
+html.light [class*="bg-purple-950/"] {
+  background-color: #faf5ff !important;
+}
+html.light [class*="border-purple-500/"] {
+  border-color: #e9d5ff !important;
+}
+
+/* Hover States */
+html.light [class*="hover:bg-zinc-800"]:hover {
+  background-color: #e2e8f0 !important;
+}
+html.light [class*="hover:bg-zinc-900"]:hover {
+  background-color: #f1f5f9 !important;
+}
+html.light [class*="hover:border-zinc-700"]:hover {
+  border-color: #cbd5e1 !important;
+}
+
+/* Form Controls */
 html.light input,
 html.light textarea,
 html.light select {
   background-color: #ffffff !important;
   color: #0f172a !important;
   border-color: #cbd5e1 !important;
+  box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.03) !important;
 }
-
+html.light input:focus,
+html.light textarea:focus,
+html.light select:focus {
+  border-color: #10b981 !important;
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15) !important;
+}
 html.light input::placeholder,
 html.light textarea::placeholder {
   color: #94a3b8 !important;
 }
 
-html.light .hover\:bg-zinc-800:hover,
-html.light .hover\:bg-zinc-800\/80:hover {
-  background-color: #e2e8f0 !important;
-}
-
-html.light .hover\:bg-zinc-900:hover {
-  background-color: #f8fafc !important;
-}
-
-html.light .hover\:border-zinc-700:hover,
-html.light .hover\:border-zinc-700\/80:hover {
-  border-color: #cbd5e1 !important;
-}
-
+/* Navigation, Header & Table Elements */
 html.light header {
-  background-color: rgba(255, 255, 255, 0.85) !important;
+  background-color: rgba(255, 255, 255, 0.92) !important;
   border-bottom-color: #e2e8f0 !important;
-  backdrop-filter: blur(12px) !important;
+  backdrop-filter: blur(16px) !important;
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.03) !important;
 }
 
 html.light aside {
   background-color: #ffffff !important;
   border-right-color: #e2e8f0 !important;
+  box-shadow: 1px 0 3px 0 rgba(15, 23, 42, 0.02) !important;
+}
+
+html.light thead,
+html.light th {
+  background-color: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom-color: #e2e8f0 !important;
+}
+
+/* Charts in light mode */
+html.light .recharts-cartesian-grid line {
+  stroke: #e2e8f0 !important;
+}
+html.light .recharts-text {
+  fill: #64748b !important;
+}
+
+/* Preserve Credit Card visual fidelity in light mode */
+html.light .bg-gradient-to-br,
+html.light [class*="from-zinc-900"],
+html.light [class*="from-slate-900"] {
+  color: inherit;
+}
+html.light .bg-gradient-to-br .text-white,
+html.light [class*="from-zinc-900"] .text-white,
+html.light [class*="from-slate-900"] .text-white {
+  color: #ffffff !important;
 }
 
 /* Modal and Drawer backdrop in light mode */
 html.light .fixed.inset-0.bg-black\/80,
-html.light .fixed.inset-0.bg-zinc-950\/80 {
-  background-color: rgba(15, 23, 42, 0.4) !important;
+html.light .fixed.inset-0.bg-zinc-950\/80,
+html.light .fixed.inset-0.bg-zinc-950\/70 {
+  background-color: rgba(15, 23, 42, 0.45) !important;
   backdrop-filter: blur(8px) !important;
 }
 
