@@ -7,6 +7,8 @@ import { Sidebar } from '../layout/Sidebar';
 import { useReleaseStore } from '../../stores/useReleaseStore';
 import { useAuthStore } from '../../stores/useAuthStore';
 import * as api from '../../services/api';
+import { APP_VERSION } from '../../config/appMeta';
+import { RELEASE_NOTES } from '../../data/releaseNotes';
 
 vi.mock('../../services/api', () => ({
   getReleaseStatus: vi.fn(),
@@ -58,16 +60,10 @@ describe('ReleaseNotesModal - Gestão de Atualizações e Novidades (CT001 & CT0
       expect(screen.getByText('Novidades do NossoSaldo')).toBeInTheDocument();
     });
 
-    // As novidades da versão devem estar presentes
-    expect(
-      screen.getByText('Visualização em Lista & Ordenação Alfabética de Categorias')
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Categorias em Ordem Alfabética (A-Z)')
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText('Visualização em Formato de Lista')
-    ).toBeInTheDocument();
+    // As novidades da versão mais recente devem estar presentes
+    const latest = RELEASE_NOTES[0];
+    expect(screen.getByText(latest.title)).toBeInTheDocument();
+    expect(screen.getByText(latest.items[0].title)).toBeInTheDocument();
 
     // Na Sidebar, o indicador de novidade "NOVO ✨" e o ping devem estar visíveis
     expect(screen.getByText('NOVO ✨')).toBeInTheDocument();
@@ -78,8 +74,8 @@ describe('ReleaseNotesModal - Gestão de Atualizações e Novidades (CT001 & CT0
     // Backend informa que o usuário já viu a versão atual
     vi.mocked(api.getReleaseStatus).mockResolvedValueOnce({
       hasSeenCurrentVersion: true,
-      latestSeenVersion: '2.1.0',
-      seenVersions: ['2.1.0', '2.0.0'],
+      latestSeenVersion: APP_VERSION,
+      seenVersions: [APP_VERSION, '2.0.0'],
     });
 
     render(
@@ -106,7 +102,7 @@ describe('ReleaseNotesModal - Gestão de Atualizações e Novidades (CT001 & CT0
   it('ao clicar em "Entendi, vamos lá!", marca a versão como visualizada no backend e fecha o modal', async () => {
     vi.mocked(api.markReleaseAsViewed).mockResolvedValueOnce({
       success: true,
-      versao: '2.1.0',
+      versao: APP_VERSION,
       visualizadoEm: new Date().toISOString(),
     });
 
@@ -126,8 +122,8 @@ describe('ReleaseNotesModal - Gestão de Atualizações e Novidades (CT001 & CT0
     fireEvent.click(confirmButton);
 
     await waitFor(() => {
-      // Deve ter chamado a API para salvar no banco de dados
-      expect(api.markReleaseAsViewed).toHaveBeenCalledWith('2.1.0', 'fake-token-123');
+      // Deve ter chamado a API para salvar no banco de dados com a versão atual
+      expect(api.markReleaseAsViewed).toHaveBeenCalledWith(APP_VERSION, 'fake-token-123');
       // Modal é fechado
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
