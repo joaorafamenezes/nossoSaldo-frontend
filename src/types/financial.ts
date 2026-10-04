@@ -51,7 +51,7 @@ export interface Gasto {
   categoriaNome?: string;
   responsavelId: string;
   responsavelNome?: string;
-  cartaoCreditoId?: string;
+  cartaoCreditoId?: string | null;
   cartaoNome?: string;
   faturaCartaoId?: string;
   recorrenciaPaiId?: string;
@@ -59,6 +59,9 @@ export interface Gasto {
   dataFimRecorrencia?: string;
   escopoEdicao?: EscopoEdicaoRecorrencia;
   targetCompetencia?: string;
+  atualizarTodasParcelas?: boolean;
+  parcelaId?: string;
+  numeroParcela?: number;
   lancamentosBase?: LancamentoBase[];
   createdAt: string;
   updatedAt: string;

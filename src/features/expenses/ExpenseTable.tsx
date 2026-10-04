@@ -381,7 +381,7 @@ export function ExpenseTable({
                                     }`}
                                   >
                                     <div className="min-w-0 pr-2">
-                                      <div className="flex items-center gap-1.5">
+                                      <div className="flex items-center gap-1.5 flex-wrap">
                                         <span className="text-xs font-bold font-mono text-zinc-200">
                                           Parcela {inst.numeroParcela}/{expense.numeroParcelas || expense.lancamentosBase?.length || 1}
                                         </span>
@@ -391,6 +391,15 @@ export function ExpenseTable({
                                         >
                                           {isInstPaid ? 'Paga' : instDaysDiff < 0 ? 'Atrasada' : 'Pendente'}
                                         </Badge>
+                                        {inst.faturaCartaoId || (inst.faturaCartaoId === undefined && expense.cartaoCreditoId) ? (
+                                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-purple-500/10 text-purple-400 border border-purple-500/20">
+                                            💳 Cartão
+                                          </span>
+                                        ) : (
+                                          <span className="text-[9px] font-mono px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                                            🏦 C. Corrente
+                                          </span>
+                                        )}
                                       </div>
                                       <p className="text-[11px] font-mono text-zinc-400 mt-0.5">
                                         Venc: {formatDate(inst.dataVencimentoParcela)}
@@ -400,32 +409,45 @@ export function ExpenseTable({
                                       </p>
                                     </div>
 
-                                    <Button
-                                      size="sm"
-                                      variant={isInstPaid ? 'secondary' : 'primary'}
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setStatusExpenseToConfirm(expense);
-                                        setStatusInstallmentToConfirm(inst);
-                                      }}
-                                      className={`text-[10px] font-bold px-2.5 py-1 rounded-lg shrink-0 ${
-                                        isInstPaid
-                                          ? 'bg-zinc-800 text-zinc-200 border border-zinc-700'
-                                          : 'bg-emerald-600 text-white hover:bg-emerald-500'
-                                      }`}
-                                    >
-                                      {isInstPaid ? (
-                                        <>
-                                          <RotateCcw className="h-3 w-3 mr-1 text-zinc-400" />
-                                          <span>Reabrir</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <CheckCircle2 className="h-3 w-3 mr-1" />
-                                          <span>Pagar</span>
-                                        </>
-                                      )}
-                                    </Button>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openEditExpense(expense, inst);
+                                        }}
+                                        title={`Editar forma de pagamento / dados da parcela ${inst.numeroParcela}`}
+                                        className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-800 hover:text-white transition-colors border border-transparent hover:border-zinc-700"
+                                      >
+                                        <Edit3 className="h-3.5 w-3.5" />
+                                      </button>
+                                      <Button
+                                        size="sm"
+                                        variant={isInstPaid ? 'secondary' : 'primary'}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setStatusExpenseToConfirm(expense);
+                                          setStatusInstallmentToConfirm(inst);
+                                        }}
+                                        className={`text-[10px] font-bold px-2.5 py-1 rounded-lg shrink-0 ${
+                                          isInstPaid
+                                            ? 'bg-zinc-800 text-zinc-200 border border-zinc-700'
+                                            : 'bg-emerald-600 text-white hover:bg-emerald-500'
+                                        }`}
+                                      >
+                                        {isInstPaid ? (
+                                          <>
+                                            <RotateCcw className="h-3 w-3 mr-1 text-zinc-400" />
+                                            <span>Reabrir</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                                            <span>Pagar</span>
+                                          </>
+                                        )}
+                                      </Button>
+                                    </div>
                                   </div>
                                 );
                               })}

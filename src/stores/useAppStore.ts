@@ -52,9 +52,10 @@ interface AppState {
   // Modals & Drawers
   isExpenseDrawerOpen: boolean;
   editingExpense: Gasto | null;
+  editingInstallment?: LancamentoBase | null;
   newExpenseDefaults?: { categoriaId?: string; cartaoCreditoId?: string; tipo?: TipoGasto } | null;
   openNewExpense: (defaults?: { categoriaId?: string; cartaoCreditoId?: string; tipo?: TipoGasto }) => void;
-  openEditExpense: (expense: Gasto) => void;
+  openEditExpense: (expense: Gasto, installment?: LancamentoBase | null) => void;
   closeExpenseDrawer: () => void;
 
   // Grocery State
@@ -270,10 +271,11 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   isExpenseDrawerOpen: false,
   editingExpense: null,
+  editingInstallment: null,
   newExpenseDefaults: null,
-  openNewExpense: (defaults) => set({ isExpenseDrawerOpen: true, editingExpense: null, newExpenseDefaults: defaults || null }),
-  openEditExpense: (expense) => set({ isExpenseDrawerOpen: true, editingExpense: expense, newExpenseDefaults: null }),
-  closeExpenseDrawer: () => set({ isExpenseDrawerOpen: false, editingExpense: null, newExpenseDefaults: null }),
+  openNewExpense: (defaults) => set({ isExpenseDrawerOpen: true, editingExpense: null, editingInstallment: null, newExpenseDefaults: defaults || null }),
+  openEditExpense: (expense, installment) => set({ isExpenseDrawerOpen: true, editingExpense: expense, editingInstallment: installment || null, newExpenseDefaults: null }),
+  closeExpenseDrawer: () => set({ isExpenseDrawerOpen: false, editingExpense: null, editingInstallment: null, newExpenseDefaults: null }),
 
   isShoppingFocusMode: false,
   setShoppingFocusMode: (active) => set({ isShoppingFocusMode: active }),
@@ -682,6 +684,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (updates.cartaoCreditoId !== undefined) payload.cartaoCreditoId = updates.cartaoCreditoId || null;
       if (updates.escopoEdicao !== undefined) payload.escopoEdicao = updates.escopoEdicao;
       if (updates.targetCompetencia !== undefined) payload.targetCompetencia = updates.targetCompetencia;
+      if (updates.atualizarTodasParcelas !== undefined) payload.atualizarTodasParcelas = updates.atualizarTodasParcelas;
+      if (updates.parcelaId !== undefined) payload.parcelaId = updates.parcelaId;
+      if (updates.numeroParcela !== undefined) payload.numeroParcela = updates.numeroParcela;
 
       await api.updateExpense(token, id, payload);
       await get().loadApiData(token);
@@ -700,9 +705,14 @@ export const useAppStore = create<AppState>((set, get) => ({
           const isExactMonth = existing.competencia?.startsWith(targetComp);
 
           if (isExactMonth) {
+            const newCardId = 'cartaoCreditoId' in updates ? (updates.cartaoCreditoId || undefined) : existing.cartaoCreditoId;
+            const newCard = newCardId ? state.cards.find((c) => c.id === newCardId) : undefined;
             const updated = {
               ...existing,
               ...updates,
+              cartaoCreditoId: newCardId || undefined,
+              cartaoNome: newCard?.descricao,
+              faturaCartaoId: newCardId ? existing.faturaCartaoId : undefined,
               updatedAt: new Date().toISOString(),
             };
             return {
@@ -712,6 +722,8 @@ export const useAppStore = create<AppState>((set, get) => ({
             // Materializa um novo registro para este mês específico mantendo o root intacto
             const targetDueParts = (updates.dataVencimento || existing.dataVencimento || '2026-09-15').split('-');
             const customDueDate = `${targetComp}-${targetDueParts[2] || '15'}`;
+            const newCardId = 'cartaoCreditoId' in updates ? (updates.cartaoCreditoId || undefined) : existing.cartaoCreditoId;
+            const newCard = newCardId ? state.cards.find((c) => c.id === newCardId) : undefined;
             const materializedItem: Gasto = {
               ...existing,
               ...updates,
@@ -719,6 +731,9 @@ export const useAppStore = create<AppState>((set, get) => ({
               recorrenciaPaiId: seriesKey,
               competencia: `${targetComp}-01`,
               dataVencimento: customDueDate,
+              cartaoCreditoId: newCardId || undefined,
+              cartaoNome: newCard?.descricao,
+              faturaCartaoId: newCardId ? existing.faturaCartaoId : undefined,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             };
@@ -735,35 +750,97 @@ export const useAppStore = create<AppState>((set, get) => ({
           updatedAt: new Date().toISOString(),
         };
 
+        if ('cartaoCreditoId' in updates) {
+          updatedExpense.cartaoCreditoId = updates.cartaoCreditoId || undefined;
+          if (!updatedExpense.cartaoCreditoId) {
+            updatedExpense.cartaoNome = undefined;
+            updatedExpense.faturaCartaoId = undefined;
+          }
+        }
+
         if (targetOrigem === 'parcelado') {
           const numParcelas = updates.numeroParcelas || existing.numeroParcelas || 2;
           const baseDate = new Date((updates.dataVencimento || existing.dataVencimento || new Date().toISOString().split('T')[0]) + 'T00:00:00');
           const totalVal = Number(updates.valor ?? existing.valor);
           const valParcela = totalVal / numParcelas;
 
-          updatedExpense.origemLancamento = 'parcelado';
-          updatedExpense.numeroParcelas = numParcelas;
-          updatedExpense.recorrenciaPaiId = undefined;
-          updatedExpense.dataInicioRecorrencia = undefined;
-          updatedExpense.dataFimRecorrencia = undefined;
-          updatedExpense.lancamentosBase = Array.from({ length: numParcelas }, (_, index) => {
-            const num = index + 1;
-            const dueDate = new Date(baseDate);
-            dueDate.setMonth(baseDate.getMonth() + index);
-            const dueStr = dueDate.toISOString().split('T')[0];
-            const compStr = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-01`;
+          const cardChanged = 'cartaoCreditoId' in updates && (updates.cartaoCreditoId || '') !== (existing.cartaoCreditoId || '');
+          const atualizarTodas = updates.atualizarTodasParcelas !== undefined
+            ? updates.atualizarTodasParcelas
+            : (updates.escopoEdicao ? updates.escopoEdicao !== 'THIS_ONLY' : true);
 
-            return {
-              id: `lb-${id}-${num}`,
-              gastoId: id,
-              descricao: `${updatedExpense.descricao} - parcela ${num}/${numParcelas}`,
-              valorParcela: valParcela,
-              numeroParcela: num,
-              dataVencimentoParcela: dueStr,
-              status: (updatedExpense.status || 'pendente') as StatusGasto,
-              competencia: compStr,
-            };
-          });
+          if (existing.origemLancamento === 'parcelado' && cardChanged && !atualizarTodas) {
+            // CT001: Usuário escolheu NÃO: apenas a parcela selecionada migra, demais permanecem no cartão de crédito
+            const currentInstallments = existing.lancamentosBase || [];
+            let targetInstallment = null;
+            if (updates.parcelaId) {
+              targetInstallment = currentInstallments.find((i) => i.id === updates.parcelaId);
+            } else if (updates.numeroParcela) {
+              targetInstallment = currentInstallments.find((i) => i.numeroParcela === updates.numeroParcela);
+            } else if (updates.targetCompetencia) {
+              targetInstallment = currentInstallments.find((i) => i.competencia?.startsWith(updates.targetCompetencia!) || i.dataVencimentoParcela?.startsWith(updates.targetCompetencia!));
+            }
+            if (!targetInstallment) {
+              targetInstallment = currentInstallments.find((i) => i.status === 'pendente') || currentInstallments[0];
+            }
+
+            const updatedInstallments = currentInstallments.map((inst) => {
+              if (targetInstallment && inst.id === targetInstallment.id) {
+                return {
+                  ...inst,
+                  faturaCartaoId: updates.cartaoCreditoId ? `fat-${updates.cartaoCreditoId}-${inst.competencia?.substring(0, 7) || '2026-09'}` : undefined,
+                  faturaCartaoCompetencia: updates.cartaoCreditoId ? (inst.competencia?.substring(0, 7) || '2026-09') : undefined,
+                };
+              }
+              return inst;
+            });
+
+            updatedExpense.origemLancamento = 'parcelado';
+            updatedExpense.lancamentosBase = updatedInstallments;
+            updatedExpense.cartaoCreditoId = existing.cartaoCreditoId;
+            updatedExpense.cartaoNome = existing.cartaoNome;
+          } else {
+            // CT001: Usuário escolheu SIM: todas as parcelas são migradas
+            const newCardId = 'cartaoCreditoId' in updates ? (updates.cartaoCreditoId || undefined) : existing.cartaoCreditoId;
+            const newCard = newCardId ? state.cards.find((c) => c.id === newCardId) : undefined;
+            updatedExpense.cartaoCreditoId = newCardId || undefined;
+            updatedExpense.cartaoNome = newCard?.descricao;
+
+            const existingInstallments = existing.lancamentosBase;
+            if (existingInstallments && existingInstallments.length === numParcelas && !updates.valor && !updates.numeroParcelas) {
+              updatedExpense.lancamentosBase = existingInstallments.map((inst) => ({
+                ...inst,
+                faturaCartaoId: newCardId ? `fat-${newCardId}-${inst.competencia?.substring(0, 7) || '2026-09'}` : undefined,
+                faturaCartaoCompetencia: newCardId ? (inst.competencia?.substring(0, 7) || '2026-09') : undefined,
+              }));
+            } else {
+              updatedExpense.origemLancamento = 'parcelado';
+              updatedExpense.numeroParcelas = numParcelas;
+              updatedExpense.recorrenciaPaiId = undefined;
+              updatedExpense.dataInicioRecorrencia = undefined;
+              updatedExpense.dataFimRecorrencia = undefined;
+              updatedExpense.lancamentosBase = Array.from({ length: numParcelas }, (_, index) => {
+                const num = index + 1;
+                const dueDate = new Date(baseDate);
+                dueDate.setMonth(baseDate.getMonth() + index);
+                const dueStr = dueDate.toISOString().split('T')[0];
+                const compStr = `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, '0')}-01`;
+
+                return {
+                  id: `lb-${id}-${num}`,
+                  gastoId: id,
+                  descricao: `${updatedExpense.descricao} - parcela ${num}/${numParcelas}`,
+                  valorParcela: valParcela,
+                  numeroParcela: num,
+                  dataVencimentoParcela: dueStr,
+                  status: (updatedExpense.status || 'pendente') as StatusGasto,
+                  competencia: compStr,
+                  faturaCartaoId: newCardId ? `fat-${newCardId}-${compStr.substring(0, 7)}` : undefined,
+                  faturaCartaoCompetencia: newCardId ? compStr.substring(0, 7) : undefined,
+                };
+              });
+            }
+          }
         } else if (targetOrigem === 'unico') {
           updatedExpense.origemLancamento = 'unico';
           updatedExpense.numeroParcelas = 1;
@@ -784,12 +861,16 @@ export const useAppStore = create<AppState>((set, get) => ({
           if (targetOrigem === 'recorrente' && (e.recorrenciaPaiId === seriesKey || e.id === seriesKey)) {
             const eComp = e.competencia?.substring(0, 7) || '';
             if (escopo === 'ALL_SERIES' || (escopo === 'THIS_AND_FUTURE' && eComp >= targetComp)) {
+              const newCardId = 'cartaoCreditoId' in updates ? (updates.cartaoCreditoId || undefined) : e.cartaoCreditoId;
+              const newCard = newCardId ? state.cards.find((c) => c.id === newCardId) : undefined;
               return {
                 ...e,
                 valor: updates.valor !== undefined ? Number(updates.valor) : e.valor,
                 descricao: updates.descricao !== undefined ? updates.descricao : e.descricao,
                 categoriaId: updates.categoriaId !== undefined ? updates.categoriaId : e.categoriaId,
-                cartaoCreditoId: updates.cartaoCreditoId !== undefined ? updates.cartaoCreditoId : e.cartaoCreditoId,
+                cartaoCreditoId: newCardId || undefined,
+                cartaoNome: newCard?.descricao,
+                faturaCartaoId: newCardId ? e.faturaCartaoId : undefined,
                 updatedAt: new Date().toISOString(),
               };
             }
