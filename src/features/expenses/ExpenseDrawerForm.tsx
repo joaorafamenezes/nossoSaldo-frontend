@@ -83,7 +83,8 @@ export function ExpenseDrawerForm() {
         setInitialCardIdOnOpen(expCardId);
       }
     } else {
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
       const initialTipo = newExpenseDefaults?.tipo || 'despesa';
       const initialCatId = newExpenseDefaults?.categoriaId || categories[0]?.id || '';
       const initialCardId = newExpenseDefaults?.cartaoCreditoId || '';
@@ -104,7 +105,7 @@ export function ExpenseDrawerForm() {
       if (initialCardId) {
         const card = cards.find((c) => c.id === initialCardId);
         if (card) {
-          const autoDueDate = calculateCardDueDate(card, selectedCompetencia || today);
+          const autoDueDate = calculateCardDueDate(card, now);
           setDataVencimento(autoDueDate);
         } else {
           setDataVencimento(today);
@@ -126,7 +127,7 @@ export function ExpenseDrawerForm() {
     if (newCardId) {
       const card = cards.find((c) => c.id === newCardId);
       if (card) {
-        const autoDueDate = calculateCardDueDate(card, selectedCompetencia || dataVencimento || new Date());
+        const autoDueDate = calculateCardDueDate(card, new Date());
         setDataVencimento(autoDueDate);
       }
     }
@@ -540,7 +541,7 @@ export function ExpenseDrawerForm() {
                 {matchedCard && (
                   <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-emerald-400 font-medium bg-emerald-950/30 border border-emerald-800/40 rounded-lg px-2.5 py-1">
                     <CreditCard className="h-3.5 w-3.5 shrink-0" />
-                    <span>Vencimento automático na fatura vigente: <strong>{formatDate(dataVencimento)}</strong></span>
+                    <span>Vencimento sugerido pela data de fechamento: <strong>{formatDate(dataVencimento)}</strong></span>
                   </div>
                 )}
               </div>

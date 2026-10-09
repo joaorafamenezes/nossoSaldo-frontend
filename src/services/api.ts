@@ -6,7 +6,10 @@ function normalizeApiBaseUrl(rawUrl?: string): string {
   return trimmedUrl.endsWith(API_PREFIX) ? trimmedUrl : `${trimmedUrl}${API_PREFIX}`;
 }
 
-export const API_URL = normalizeApiBaseUrl((import.meta as any).env?.VITE_API_URL);
+const configuredApiUrl = (import.meta as any).env?.VITE_API_URL;
+export const API_URL = import.meta.env.DEV
+  ? API_PREFIX
+  : normalizeApiBaseUrl(configuredApiUrl);
 
 async function parseResponse(response: Response) {
   const body = await response.json().catch(() => null);
@@ -589,4 +592,3 @@ export async function markReleaseAsViewed(versao: string, token: string) {
 
   return parseResponse(response);
 }
-
