@@ -1,6 +1,8 @@
 name: Frontend Dependency Audit
 
 on:
+  pull_request:
+  push:
   workflow_dispatch:
   schedule:
     - cron: "27 4 * * 1"
@@ -12,8 +14,6 @@ jobs:
   audit:
     name: Audit npm dependencies
     runs-on: ubuntu-latest
-    continue-on-error: true
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4

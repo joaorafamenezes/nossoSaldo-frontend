@@ -1,5 +1,5 @@
 ﻿import '@testing-library/jest-dom/vitest';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import * as React from 'react';
 import { calculateCardDueDate } from '../../lib/utils';
@@ -42,6 +42,10 @@ describe('Lançamento Já Pago e Vencimento Automático de Cartão de Crédito',
       ],
       selectedCompetencia: '2026-09',
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   describe('Cálculo Automático de Data de Vencimento do Cartão (calculateCardDueDate)', () => {
@@ -117,19 +121,35 @@ describe('Lançamento Já Pago e Vencimento Automático de Cartão de Crédito',
       });
     });
 
-    it('preenche automaticamente a data de vencimento do cartão ao selecioná-lo', async () => {
+    it('sugere a próxima fatura quando a data atual passou do fechamento', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-15T12:00:00'));
+      useAppStore.setState({ selectedCompetencia: '2026-08' });
+
       render(<ExpenseDrawerForm />);
 
       const selectCartao = screen.getByLabelText(/Forma de Pagamento \/ Cartão de Crédito/i);
 
-      // Seleciona o cartão Nubank (vencimento dia 17)
       fireEvent.change(selectCartao, { target: { value: 'card-nubank' } });
 
       const inputVencimento = screen.getByLabelText(/Data de Vencimento/i) as HTMLInputElement;
-      expect(inputVencimento.value).toBe('2026-09-17');
+      expect(inputVencimento.value).toBe('2026-10-17');
 
-      // Verifica exibição do aviso visual de vencimento automático
-      expect(screen.getByText(/Vencimento automático na fatura vigente/i)).toBeInTheDocument();
+      expect(screen.getByText(/Vencimento sugerido pela data de fechamento/i)).toBeInTheDocument();
+    });
+
+    it('sugere a fatura em aberto quando a data atual ainda nao chegou ao fechamento', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-07T12:00:00'));
+
+      render(<ExpenseDrawerForm />);
+
+      fireEvent.change(screen.getByLabelText(/Forma de Pagamento \/ Cartão de Crédito/i), {
+        target: { value: 'card-nubank' },
+      });
+
+      const inputVencimento = screen.getByLabelText(/Data de Vencimento/i) as HTMLInputElement;
+      expect(inputVencimento.value).toBe('2026-09-17');
     });
   });
 });

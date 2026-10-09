@@ -38,6 +38,7 @@ Quando `VITE_API_URL` nao e informado, o frontend usa a configuracao padrao defi
 ## Regras de UX e negocio no frontend
 
 - Novo gasto exige data de vencimento.
+- Ao selecionar um cartao de credito em um novo lancamento, o vencimento sugerido considera a data atual e o dia de fechamento do cartao: antes ou no fechamento, sugere a fatura em aberto; depois do fechamento, sugere a proxima fatura. A sugestao permanece editavel.
 - Ao alterar `Vencimento`, o campo `Competencia` acompanha automaticamente o mes/ano do vencimento.
 - Exemplo: vencimento `2026-08-17` define competencia `2026-08` na tela e envia `2026-08-01` para a API.
 - O botao de redefinicao de senha fica disponivel no fluxo publico de recuperacao, nao no menu autenticado do dashboard.
