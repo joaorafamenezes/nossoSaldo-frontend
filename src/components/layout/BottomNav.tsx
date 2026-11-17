@@ -7,6 +7,7 @@ import {
   ShoppingCart,
   Sparkles,
   Users2,
+  BarChart3,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
@@ -27,6 +28,7 @@ export function BottomNav() {
     },
     { tab: 'ai', label: 'IA', icon: Sparkles },
     { tab: 'joint', label: 'Casal', icon: Users2 },
+    { tab: 'reports', label: 'Relatórios', icon: BarChart3 },
   ];
 
   return (

@@ -7,6 +7,7 @@ import {
   ShoppingCart,
   Sparkles,
   Users2,
+  BarChart3,
   PlusCircle,
   Search,
   X,
@@ -87,6 +88,14 @@ export function CommandMenu() {
       icon: Users2,
       action: () => {
         setActiveTab('joint');
+        setCommandMenuOpen(false);
+      },
+    },
+    {
+      label: 'Ir para Relatórios',
+      icon: BarChart3,
+      action: () => {
+        setActiveTab('reports');
         setCommandMenuOpen(false);
       },
     },

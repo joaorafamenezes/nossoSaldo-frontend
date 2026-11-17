@@ -28,7 +28,7 @@ import {
 } from '../lib/utils';
 import * as api from '../services/api';
 
-export type NavigationTab = 'dashboard' | 'expenses' | 'cards' | 'supermarket' | 'categories' | 'ai' | 'joint';
+export type NavigationTab = 'dashboard' | 'expenses' | 'cards' | 'supermarket' | 'categories' | 'ai' | 'joint' | 'reports';
 
 interface AppState {
   // Navigation & Viewport State
