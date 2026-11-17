@@ -137,16 +137,23 @@ describe('Gastos Recorrentes Contínuos Sem Data Final (Projeção e Materializa
   });
 
   it('mantém o status de meses futuros como Pendente quando o mês vigente for pago', () => {
-    // Em Setembro/2026, Internet foi paga com lançamento em lancamentosBase
-    const statusSept = getEffectiveExpenseStatus(mockRecurringInternetPaidInSept, '2026-09');
-    expect(statusSept.isPaid).toBe(true);
-    expect(statusSept.effectiveStatus).toBe('pago');
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-16T12:00:00'));
 
-    // Em Outubro/2026, Internet ainda não foi paga, logo deve ser projetada como pendente
-    const statusOct = getEffectiveExpenseStatus(mockRecurringInternetPaidInSept, '2026-10');
-    expect(statusOct.isPaid).toBe(false);
-    expect(statusOct.effectiveStatus).toBe('pendente');
-    expect(statusOct.effectiveDueDate).toBe('2026-10-15');
+    try {
+      // Em Setembro/2026, Internet foi paga com lançamento em lancamentosBase
+      const statusSept = getEffectiveExpenseStatus(mockRecurringInternetPaidInSept, '2026-09');
+      expect(statusSept.isPaid).toBe(true);
+      expect(statusSept.effectiveStatus).toBe('pago');
+
+      // Em Outubro/2026, Internet ainda não foi paga, logo deve ser projetada como pendente
+      const statusOct = getEffectiveExpenseStatus(mockRecurringInternetPaidInSept, '2026-10');
+      expect(statusOct.isPaid).toBe(false);
+      expect(statusOct.effectiveStatus).toBe('pendente');
+      expect(statusOct.effectiveDueDate).toBe('2026-10-15');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('calcula dinamicamente a data de vencimento ajustando para meses com menos de 31 dias', () => {
