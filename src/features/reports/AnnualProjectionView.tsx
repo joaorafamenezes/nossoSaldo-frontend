@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { cn, formatCurrency } from '../../lib/utils';
 import { MESES_PROJECAO, ProjecaoAnual, SerieMensal } from './projecaoAnual';
+
+type ExibicaoProjecao = 'ambos' | 'receitas' | 'despesas';
 
 type AnnualProjectionViewProps = {
   ano: number;
@@ -71,9 +74,13 @@ export function AnnualProjectionView({
   onResponsavelChange,
   onRetry,
 }: AnnualProjectionViewProps) {
+  const [exibicao, setExibicao] = useState<ExibicaoProjecao>('ambos');
   const anos = report?.anosDisponiveis?.length ? report.anosDisponiveis : [ano];
   const categorias = report?.categoriasDisponiveis ?? [];
   const membros = report?.contaConjunta?.membros ?? [];
+  const mostraReceitas = exibicao !== 'despesas';
+  const mostraDespesas = exibicao !== 'receitas';
+  const mostraSaldo = exibicao === 'ambos';
 
   return (
     <section className="flex flex-col gap-6 p-4 md:p-8">
@@ -109,6 +116,20 @@ export function AnnualProjectionView({
                 {anoOpcao}
               </option>
             ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1 text-xs font-medium text-zinc-400">
+          Exibir
+          <select
+            aria-label="Exibir"
+            value={exibicao}
+            onChange={(event) => setExibicao(event.target.value as ExibicaoProjecao)}
+            className="rounded-xl border border-zinc-800 bg-zinc-950 px-3 py-2 text-sm text-zinc-100"
+          >
+            <option value="ambos">Ambos</option>
+            <option value="receitas">Somente receitas</option>
+            <option value="despesas">Somente despesas</option>
           </select>
         </label>
 
@@ -187,43 +208,51 @@ export function AnnualProjectionView({
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <th
-                    colSpan={14}
-                    className="bg-emerald-500/5 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-emerald-400"
-                  >
-                    Receitas
-                  </th>
-                </tr>
-                {report.receitas.map((linha) => (
-                  <LinhaSerie key={`receita-${linha.categoriaId}`} nome={linha.categoria} serie={linha} />
-                ))}
-                <LinhaSerie nome="Total de receitas" serie={report.totalReceitas} destaque />
-                <tr>
-                  <th
-                    colSpan={14}
-                    className="bg-zinc-900 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400"
-                  >
-                    Despesas
-                  </th>
-                </tr>
-                {report.despesas.map((linha) => (
-                  <LinhaSerie key={`despesa-${linha.categoriaId}`} nome={linha.categoria} serie={linha} />
-                ))}
-                <LinhaSerie nome="Total de despesas" serie={report.totalDespesas} destaque />
-                <LinhaSerie nome="Saldo" serie={report.saldo} destacarNegativo destaque />
+                {mostraReceitas && (
+                  <tr>
+                    <th
+                      colSpan={14}
+                      className="bg-emerald-500/5 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-emerald-400"
+                    >
+                      Receitas
+                    </th>
+                  </tr>
+                )}
+                {mostraReceitas &&
+                  report.receitas.map((linha) => (
+                    <LinhaSerie key={`receita-${linha.categoriaId}`} nome={linha.categoria} serie={linha} />
+                  ))}
+                {mostraReceitas && <LinhaSerie nome="Total de receitas" serie={report.totalReceitas} destaque />}
+                {mostraDespesas && (
+                  <tr>
+                    <th
+                      colSpan={14}
+                      className="bg-zinc-900 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-zinc-400"
+                    >
+                      Despesas
+                    </th>
+                  </tr>
+                )}
+                {mostraDespesas &&
+                  report.despesas.map((linha) => (
+                    <LinhaSerie key={`despesa-${linha.categoriaId}`} nome={linha.categoria} serie={linha} />
+                  ))}
+                {mostraDespesas && <LinhaSerie nome="Total de despesas" serie={report.totalDespesas} destaque />}
+                {mostraSaldo && <LinhaSerie nome="Saldo" serie={report.saldo} destacarNegativo destaque />}
               </tbody>
             </table>
           </div>
-          <p className="text-sm text-zinc-400">
-            Saldo líquido do período:{' '}
-            <span
-              data-testid="saldo-liquido"
-              className={cn('font-mono font-semibold', report.saldo.total < 0 ? 'text-red-400' : 'text-zinc-100')}
-            >
-              {formatCurrency(report.saldo.total)}
-            </span>
-          </p>
+          {mostraSaldo && (
+            <p className="text-sm text-zinc-400">
+              Saldo líquido do período:{' '}
+              <span
+                data-testid="saldo-liquido"
+                className={cn('font-mono font-semibold', report.saldo.total < 0 ? 'text-red-400' : 'text-zinc-100')}
+              >
+                {formatCurrency(report.saldo.total)}
+              </span>
+            </p>
+          )}
         </div>
       )}
     </section>

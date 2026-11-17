@@ -114,6 +114,41 @@ describe('AnnualProjectionView', () => {
     expect(filtro.onCategoryChange).toHaveBeenCalledWith('cat-moradia');
   });
 
+  it('filtra a grade entre receitas, despesas e ambos', () => {
+    renderView(
+      relatorio({
+        receitas: [{ categoriaId: 'cat-salario', categoria: 'Salario', ...serie([5000]) }],
+        despesas: [{ categoriaId: 'cat-moradia', categoria: 'Moradia', ...serie([3200]) }],
+        totalReceitas: serie([5000]),
+        totalDespesas: serie([3200]),
+        saldo: serie([1800]),
+      }),
+    );
+
+    const grade = () => within(screen.getByTestId('projection-grid'));
+    expect(grade().getByRole('rowheader', { name: 'Salario' })).toBeInTheDocument();
+    expect(grade().getByRole('rowheader', { name: 'Moradia' })).toBeInTheDocument();
+    expect(grade().getByRole('rowheader', { name: 'Saldo' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Exibir'), { target: { value: 'receitas' } });
+    expect(grade().getByRole('rowheader', { name: 'Salario' })).toBeInTheDocument();
+    expect(grade().queryByRole('rowheader', { name: 'Moradia' })).not.toBeInTheDocument();
+    expect(grade().queryByText('Despesas')).not.toBeInTheDocument();
+    expect(grade().queryByRole('rowheader', { name: 'Saldo' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('saldo-liquido')).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Exibir'), { target: { value: 'despesas' } });
+    expect(grade().queryByRole('rowheader', { name: 'Salario' })).not.toBeInTheDocument();
+    expect(grade().queryByText('Receitas')).not.toBeInTheDocument();
+    expect(grade().getByRole('rowheader', { name: 'Moradia' })).toBeInTheDocument();
+    expect(grade().getByRole('rowheader', { name: 'Total de despesas' })).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Exibir'), { target: { value: 'ambos' } });
+    expect(grade().getByRole('rowheader', { name: 'Salario' })).toBeInTheDocument();
+    expect(grade().getByRole('rowheader', { name: 'Moradia' })).toBeInTheDocument();
+    expect(screen.getByTestId('saldo-liquido')).toBeInTheDocument();
+  });
+
   it('esconde o responsavel na conta individual e oferece os membros na conta conjunta', () => {
     renderView(relatorio({ contaConjunta: null }));
     expect(screen.queryByLabelText('Responsável')).not.toBeInTheDocument();
