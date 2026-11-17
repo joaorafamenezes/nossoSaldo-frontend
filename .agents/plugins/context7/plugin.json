@@ -1,0 +1,4 @@
+{
+  "name": "context7",
+  "description": "Context7 MCP integration for frontend dependencies (React 19, Tailwind CSS v4, Vite 7, Zustand 5, Framer Motion 12, Vitest 4)."
+}
