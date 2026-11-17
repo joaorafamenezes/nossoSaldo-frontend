@@ -10,6 +10,7 @@ import { SupermarketPage } from './features/supermarket/SupermarketPage';
 import { CategoriesPage } from './features/categories/CategoriesPage';
 import { AiPage } from './features/ai-copilot/AiPage';
 import { JointAccountView } from './features/joint-account/JointAccountView';
+import { ReportsPage } from './features/reports/ReportsPage';
 import { AiCopilotDrawer } from './features/ai-copilot/AiCopilotDrawer';
 import { ExpenseDrawerForm } from './features/expenses/ExpenseDrawerForm';
 import { useReleaseStore } from './stores/useReleaseStore';
@@ -44,6 +45,7 @@ export function App() {
       {activeTab === 'supermarket' && <SupermarketPage />}
       {activeTab === 'ai' && <AiPage />}
       {activeTab === 'joint' && <JointAccountView />}
+      {activeTab === 'reports' && <ReportsPage />}
 
       {/* Floating Global Slide-over Copilot Drawer */}
       <AiCopilotDrawer />

@@ -386,6 +386,28 @@ export async function getTopCategoryReport(token: string, dateFrom: string, date
   return Array.isArray(responseBody?.data) ? responseBody.data : responseBody;
 }
 
+export async function getAnnualProjection(
+  token: string,
+  params: { ano: number; categoriaId?: string; responsavelId?: string },
+) {
+  const search = new URLSearchParams({ ano: String(params.ano) });
+  if (params.categoriaId) {
+    search.set('categoriaId', params.categoriaId);
+  }
+  if (params.responsavelId) {
+    search.set('responsavelId', params.responsavelId);
+  }
+
+  const response = await fetch(`${API_URL}/relatorio/projecaoAnual?${search.toString()}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      'x-access-token': token,
+    },
+  });
+
+  return parseResponse(response);
+}
+
 export async function getWhoSpendsMoreReport(token: string, dateFrom: string, dateTo: string) {
   const response = await fetch(`${API_URL}/relatorio/quemGastaMais/${dateFrom}/${dateTo}`, {
     headers: {

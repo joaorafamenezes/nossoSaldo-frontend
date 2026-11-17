@@ -15,6 +15,7 @@ import {
   Wallet,
   Settings,
   Shield,
+  BarChart3,
   PlusCircle,
 } from 'lucide-react';
 import { Button } from '../ui/Button';
@@ -46,6 +47,7 @@ export function Sidebar() {
     { tab: 'cards', label: 'Cartões & Faturas', icon: CreditCard },
     { tab: 'ai', label: 'Copilot Financeiro', icon: Sparkles, badge: 'IA' },
     { tab: 'joint', label: 'Conta Conjunta', icon: Users2 },
+    { tab: 'reports', label: 'Relatórios', icon: BarChart3 },
   ];
 
   return (
